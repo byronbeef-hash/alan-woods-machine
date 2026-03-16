@@ -1,0 +1,61 @@
+"""
+Woods System — Configuration
+Named after Alan Woods, the legendary quantitative gambler.
+
+This config controls all system parameters: data sources, model settings,
+Kelly fraction, and bankroll management.
+"""
+
+# =============================================================================
+# API KEYS
+# =============================================================================
+# Get a free key at https://the-odds-api.com (500 requests/month free)
+ODDS_API_KEY = "YOUR_API_KEY_HERE"
+
+# =============================================================================
+# BANKROLL SETTINGS
+# =============================================================================
+STARTING_BANKROLL = 5000.0       # Starting paper-trade bankroll in USD
+KELLY_FRACTION = 0.25            # Quarter-Kelly (conservative; Alan used 2/3)
+MIN_EDGE_THRESHOLD = 0.03        # Minimum 3% edge to place a bet
+MAX_BET_FRACTION = 0.05          # Never bet more than 5% of bankroll on one play
+MIN_BET_SIZE = 10.0              # Minimum bet size in USD
+
+# =============================================================================
+# MODEL SETTINGS
+# =============================================================================
+LOOKBACK_GAMES = 15              # Number of recent games to weight heavily
+SEASON_WEIGHT = 0.3              # Weight for full-season averages
+RECENT_WEIGHT = 0.7              # Weight for recent-form averages
+MIN_GAMES_PLAYED = 10            # Minimum games before we model a player
+
+# =============================================================================
+# DATA SETTINGS
+# =============================================================================
+NBA_SEASON = "2025-26"           # Current NBA season
+SPORT_KEY = "basketball_nba"     # The Odds API sport key
+PROP_MARKETS = [                 # Player prop markets to scan
+    "player_points",
+    "player_rebounds",
+    "player_assists",
+    "player_threes",
+]
+
+# =============================================================================
+# OVERLAY CATEGORIES (Alan's terminology)
+# =============================================================================
+# Win Expectation > 1.0 = overlay (bet), < 1.0 = underlay (avoid)
+# These thresholds classify the strength of overlays found
+OVERLAY_TIERS = {
+    "STRONG":   0.08,   # 8%+ edge — rare, bet aggressively
+    "MODERATE": 0.05,   # 5-8% edge — solid overlay
+    "MARGINAL": 0.03,   # 3-5% edge — minimum threshold
+}
+
+# =============================================================================
+# FILE PATHS
+# =============================================================================
+DATA_DIR = "data"
+BETS_LOG = "data/bets_log.csv"
+PERFORMANCE_LOG = "data/performance.csv"
+MODEL_CACHE = "data/model_cache.pkl"
