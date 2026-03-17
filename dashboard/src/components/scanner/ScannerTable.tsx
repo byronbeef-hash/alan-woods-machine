@@ -96,6 +96,9 @@ export function ScannerTable({ results, onPlaceBet, placingId }: ScannerTablePro
             <th className="cursor-pointer px-4 py-2.5 hover:text-gray-300" onClick={() => handleSort('edge')}>
               Edge{sortIcon('edge')}
             </th>
+            <th className="px-4 py-2.5" title="Win Expectation = P(win) x odds. >1.0 = overlay (good bet), <1.0 = underlay (avoid)">
+              W.E.
+            </th>
             <th className="px-4 py-2.5">Tier</th>
             <th className="px-4 py-2.5">Confidence</th>
             <th className="cursor-pointer px-4 py-2.5 hover:text-gray-300" onClick={() => handleSort('suggested_bet_size')}>
@@ -134,6 +137,11 @@ export function ScannerTable({ results, onPlaceBet, placingId }: ScannerTablePro
               <td className="px-4 py-2.5 font-mono text-xs text-emerald-400">
                 {result.edge !== null ? formatEdge(result.edge) : '—'}
               </td>
+              <td className="px-4 py-2.5 font-mono text-xs">
+                {result.model_prob !== null && result.odds_decimal !== null ? (
+                  <WinExpectation value={result.model_prob * result.odds_decimal} />
+                ) : '—'}
+              </td>
               <td className="px-4 py-2.5">
                 {result.tier && <TierBadge tier={result.tier as 'STRONG' | 'MODERATE' | 'MARGINAL'} />}
               </td>
@@ -165,4 +173,14 @@ export function ScannerTable({ results, onPlaceBet, placingId }: ScannerTablePro
       </table>
     </div>
   )
+}
+
+function WinExpectation({ value }: { value: number }) {
+  // >1.0 = overlay (green), 0.82-1.0 = small overlay but risky due to commission (amber), <0.82 = underlay (red)
+  const color = value > 1.0
+    ? 'text-emerald-400'
+    : value >= 0.82
+      ? 'text-amber-400'
+      : 'text-red-400'
+  return <span className={color}>{value.toFixed(2)}</span>
 }

@@ -1,20 +1,44 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { ScanFilters } from '../lib/queries'
 import type { ScanResult } from '../lib/types'
-import { useScanResults, usePlaceBetFromScan, useRealtimeScanResults } from '../hooks/useScanResults'
+import { SPORT_LABELS } from '../lib/types'
+import { useScanResults, usePlaceBetFromScan, useRealtimeScanResults, useTriggerScan, useScanStatus } from '../hooks/useScanResults'
 import { ScannerFilters } from '../components/scanner/ScannerFilters'
 import { ScannerTable } from '../components/scanner/ScannerTable'
 import { formatDateTime } from '../lib/utils'
 
+const scanSports = [
+  { value: '', label: 'All Sports' },
+  { value: 'basketball_nba', label: 'NBA' },
+  { value: 'soccer_epl', label: 'EPL' },
+  { value: 'soccer_uefa_champions_league', label: 'UCL' },
+  { value: 'americanfootball_nfl', label: 'NFL' },
+  { value: 'aussierules_afl', label: 'AFL' },
+]
+
 export function ScannerPage() {
   const [filters, setFilters] = useState<ScanFilters>({})
   const [placingId, setPlacingId] = useState<number | null>(null)
+  const [scanSport, setScanSport] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [scanMessage, setScanMessage] = useState('')
 
   const { data: results = [], isLoading, error, dataUpdatedAt } = useScanResults(filters)
   const placeBet = usePlaceBetFromScan()
+  const triggerScan = useTriggerScan()
+  const { data: scanStatus } = useScanStatus(scanning)
 
   // Subscribe to realtime updates
   useRealtimeScanResults()
+
+  // Detect when scan completes (runner clears the request)
+  useEffect(() => {
+    if (scanning && scanStatus === null) {
+      setScanning(false)
+      setScanMessage('Scan complete')
+      setTimeout(() => setScanMessage(''), 5000)
+    }
+  }, [scanning, scanStatus])
 
   const placedResults = results.filter(r => r.status === 'PLACED')
   const activeResults = results.filter(r => r.status === 'ACTIVE')
@@ -27,6 +51,21 @@ export function ScannerPage() {
       console.error('Failed to place bet:', err)
     } finally {
       setPlacingId(null)
+    }
+  }
+
+  const handleScanNow = async () => {
+    try {
+      setScanning(true)
+      setScanMessage('')
+      await triggerScan.mutateAsync(scanSport)
+      const sportLabel = scanSport ? (SPORT_LABELS[scanSport] || scanSport) : 'all sports'
+      setScanMessage(`Scanning ${sportLabel}...`)
+    } catch (err) {
+      console.error('Failed to trigger scan:', err)
+      setScanning(false)
+      setScanMessage('Scan request failed')
+      setTimeout(() => setScanMessage(''), 5000)
     }
   }
 
@@ -47,6 +86,36 @@ export function ScannerPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Scan Now Controls */}
+          <select
+            value={scanSport}
+            onChange={e => setScanSport(e.target.value)}
+            disabled={scanning}
+            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+          >
+            {scanSports.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleScanNow}
+            disabled={scanning}
+            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {scanning ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Scanning...
+              </>
+            ) : (
+              'Scan Now'
+            )}
+          </button>
+
+          {/* Auto-scan badge */}
           <div className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -56,6 +125,23 @@ export function ScannerPage() {
           </div>
         </div>
       </div>
+
+      {/* Scan Status Message */}
+      {scanMessage && (
+        <div className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm ${
+          scanning
+            ? 'border border-amber-700 bg-amber-900/20 text-amber-400'
+            : 'border border-emerald-700 bg-emerald-900/20 text-emerald-400'
+        }`}>
+          {scanning && (
+            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          )}
+          {scanMessage}
+        </div>
+      )}
 
       {/* Filters */}
       <ScannerFilters filters={filters} onChange={setFilters} />
@@ -112,8 +198,8 @@ export function ScannerPage() {
                 color="text-emerald-400"
               />
               <StatCard
-                label="Avg Model Prob"
-                value={`${(results.reduce((s, r) => s + (r.model_prob ?? 0), 0) / results.length * 100).toFixed(1)}%`}
+                label="Avg Win Expectation"
+                value={(results.reduce((s, r) => s + ((r.model_prob ?? 0) * (r.odds_decimal ?? 0)), 0) / results.length).toFixed(2)}
                 color="text-cyan-400"
               />
               <StatCard

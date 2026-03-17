@@ -402,6 +402,56 @@ class Database:
             print(f"  [Supabase] Error fetching scan results: {e}")
             return []
 
+    # -------------------------------------------------------------------------
+    # Manual Scan Requests (dashboard → runner communication)
+    # -------------------------------------------------------------------------
+
+    def get_manual_scan_request(self) -> Optional[dict]:
+        """Read pending manual scan request from system_config."""
+        if not self.enabled:
+            return None
+        try:
+            result = (
+                self.client.table("system_config")
+                .select("value")
+                .eq("key", "manual_scan_request")
+                .limit(1)
+                .execute()
+            )
+            if not result.data:
+                return None
+            val = result.data[0].get("value")
+            if not val or (isinstance(val, dict) and not val.get("sport_key")):
+                return None
+            # Parse if string
+            if isinstance(val, str):
+                try:
+                    val = json.loads(val)
+                except (json.JSONDecodeError, TypeError):
+                    return None
+            return val if isinstance(val, dict) and val.get("sport_key") else None
+        except Exception as e:
+            print(f"  [Supabase] Error reading manual scan request: {e}")
+            return None
+
+    def clear_manual_scan_request(self) -> bool:
+        """Clear the manual scan request after processing."""
+        if not self.enabled:
+            return False
+        try:
+            self.client.table("system_config").upsert({
+                "key": "manual_scan_request",
+                "value": None,
+                "updated_at": datetime.now().isoformat(),
+            }).execute()
+            # Invalidate cache so next read picks up the cleared state
+            self._config_cache = {}
+            self._config_cache_time = 0
+            return True
+        except Exception as e:
+            print(f"  [Supabase] Error clearing manual scan request: {e}")
+            return False
+
     def get_current_bankroll(self) -> Optional[float]:
         """Get the most recent bankroll value."""
         if not self.enabled:

@@ -121,6 +121,31 @@ export async function fetchScanResults(filters: ScanFilters = {}): Promise<ScanR
   return (data || []) as ScanResult[]
 }
 
+export async function triggerManualScan(sportKey: string): Promise<void> {
+  const { error } = await supabase
+    .from('system_config')
+    .upsert({
+      key: 'manual_scan_request',
+      value: { sport_key: sportKey || 'all', requested_at: new Date().toISOString() },
+      updated_at: new Date().toISOString(),
+    })
+
+  if (error) throw error
+}
+
+export async function fetchScanStatus(): Promise<{ sport_key: string; requested_at: string } | null> {
+  const { data, error } = await supabase
+    .from('system_config')
+    .select('value')
+    .eq('key', 'manual_scan_request')
+    .single()
+
+  if (error || !data) return null
+  const val = data.value as { sport_key?: string; requested_at?: string } | null
+  if (!val || !val.sport_key) return null
+  return val as { sport_key: string; requested_at: string }
+}
+
 export async function placeBetFromScan(scanResult: ScanResult): Promise<void> {
   // Insert into bets table
   const { data: betData, error: betError } = await supabase

@@ -381,6 +381,37 @@ def _expire_scan_results():
         log.debug(f"Error expiring scan results: {e}")
 
 
+def _check_manual_scan_requests():
+    """Poll for manual scan requests from the dashboard."""
+    try:
+        from database import Database
+        db = Database()
+        request = db.get_manual_scan_request()
+        if not request:
+            return
+
+        sport_key = request.get("sport_key", "all")
+        log.info(f"Manual scan request received: sport={sport_key}")
+
+        if sport_key == "all" or not sport_key:
+            # Scan all active sports
+            adapters = get_active_adapters()
+            for adapter in adapters:
+                try:
+                    log.info(f"  Manual scan: {adapter.display_name}")
+                    run_scan_and_bet(sport_key=adapter.sport_key)
+                except Exception as e:
+                    log.warning(f"  Manual scan error for {adapter.display_name}: {e}")
+        else:
+            run_scan_and_bet(sport_key=sport_key)
+
+        # Clear the request so dashboard knows we're done
+        db.clear_manual_scan_request()
+        log.info("Manual scan request completed and cleared.")
+    except Exception as e:
+        log.exception(f"Error processing manual scan request: {e}")
+
+
 def run_scan_for_sport(sport_key: str):
     """Wrapper to pass sport_key to the scan pipeline."""
     def _run():
@@ -406,6 +437,7 @@ def start_scheduler():
     schedule.every().day.at(RESULTS_TIME).do(run_results_and_report)
     schedule.every(2).minutes.do(run_live_monitor_if_game_hours)
     schedule.every(1).hours.do(_expire_scan_results)
+    schedule.every(30).seconds.do(_check_manual_scan_requests)
 
     # Graceful shutdown
     def handle_signal(sig, frame):

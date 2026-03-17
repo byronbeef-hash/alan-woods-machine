@@ -139,6 +139,13 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
             <Row label="Win Probability" value={bet.model_prob !== null ? formatPercent(bet.model_prob) : '—'} color="text-cyan-400" />
             <Row label="Market Implied" value={bet.market_implied !== null ? formatPercent(bet.market_implied) : '—'} />
             <Row label="Edge (Overlay)" value={bet.edge !== null ? formatEdge(bet.edge) : '—'} color="text-emerald-400" />
+            {bet.model_prob !== null && bet.odds_decimal !== null && (
+              <Row
+                label="Win Expectation"
+                value={(bet.model_prob * bet.odds_decimal).toFixed(2)}
+                color={(bet.model_prob * bet.odds_decimal) > 1.0 ? 'text-emerald-400' : (bet.model_prob * bet.odds_decimal) >= 0.82 ? 'text-amber-400' : 'text-red-400'}
+              />
+            )}
 
             <div className="border-t border-gray-700/50 pt-2" />
 
