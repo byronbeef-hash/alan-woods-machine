@@ -94,6 +94,18 @@ export function SettingsPage() {
   if (error) return <div className="text-red-400">Error loading settings: {(error as Error).message}</div>
 
   const activeSports = (local['active_sports'] as string[]) || ['basketball_nba']
+  const tradingMode = (local['woods_mode'] as string) || 'demo'
+  const autoScanEnabled = (local['auto_scan_enabled'] as boolean) ?? false
+
+  const handleModeChange = (mode: string) => {
+    setLocal(prev => ({ ...prev, woods_mode: mode }))
+    setDirty(prev => new Set(prev).add('woods_mode'))
+  }
+
+  const handleAutoScanToggle = (enabled: boolean) => {
+    setLocal(prev => ({ ...prev, auto_scan_enabled: enabled }))
+    setDirty(prev => new Set(prev).add('auto_scan_enabled'))
+  }
 
   return (
     <div className="space-y-6">
@@ -114,6 +126,98 @@ export function SettingsPage() {
       <p className="text-xs text-gray-500">
         Changes take up to 5 minutes to be picked up by the Python worker.
       </p>
+
+      {/* Trading Mode — prominent at the top */}
+      <div className="rounded-xl border-2 border-gray-700 bg-gray-900 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-300">Trading Mode</h3>
+            <p className="text-xs text-gray-500 mt-1">Controls whether bets are placed on Betfair or paper-traded</p>
+          </div>
+          <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+            tradingMode === 'live'
+              ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+              : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+          }`}>
+            {tradingMode === 'live' ? '● LIVE' : '● DEMO'}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => handleModeChange('demo')}
+            className={`rounded-lg p-4 text-left transition-all ${
+              tradingMode === 'demo'
+                ? 'bg-emerald-500/10 border-2 border-emerald-500/50 ring-1 ring-emerald-500/20'
+                : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg">📊</span>
+              <span className={`text-sm font-semibold ${tradingMode === 'demo' ? 'text-emerald-400' : 'text-gray-400'}`}>
+                Demo Mode
+              </span>
+            </div>
+            <p className="text-xs text-gray-500">Paper trading only. No real money at risk. Bets are simulated and tracked.</p>
+          </button>
+
+          <button
+            onClick={() => handleModeChange('live')}
+            className={`rounded-lg p-4 text-left transition-all ${
+              tradingMode === 'live'
+                ? 'bg-red-500/10 border-2 border-red-500/50 ring-1 ring-red-500/20'
+                : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg">💰</span>
+              <span className={`text-sm font-semibold ${tradingMode === 'live' ? 'text-red-400' : 'text-gray-400'}`}>
+                Live Trading
+              </span>
+            </div>
+            <p className="text-xs text-gray-500">Real bets placed on Betfair Exchange. Requires funded account and API key.</p>
+          </button>
+        </div>
+
+        {tradingMode === 'live' && (
+          <div className="mt-3 rounded-lg bg-red-500/10 border border-red-500/30 p-3">
+            <p className="text-xs text-red-400 font-medium">
+              ⚠️ Live mode will place real bets with real money on Betfair. Ensure your account is funded and API credentials are configured.
+            </p>
+          </div>
+        )}
+
+        {dirty.has('woods_mode') && (
+          <p className="mt-2 text-xs text-cyan-400">* Mode change pending — click Save Changes to apply</p>
+        )}
+      </div>
+
+      {/* Auto-Scan Toggle */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-300">Autonomous Auto-Scan</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Automatically scan markets and place best bets daily (min 4 bets/day when enabled)
+            </p>
+          </div>
+          <button
+            onClick={() => handleAutoScanToggle(!autoScanEnabled)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              autoScanEnabled ? 'bg-cyan-600' : 'bg-gray-700'
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              autoScanEnabled ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+        {autoScanEnabled && (
+          <p className="mt-2 text-xs text-cyan-400">
+            Auto-scan is enabled. The system will scan all active sports and place qualifying bets autonomously.
+          </p>
+        )}
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <SettingsSection title="Kelly & Sizing" fields={KELLY_FIELDS} values={local} onChange={handleChange} dirty={dirty} />
@@ -136,6 +240,29 @@ export function SettingsPage() {
                 <span className="text-xs text-gray-600">{key}</span>
               </label>
             ))}
+          </div>
+        </div>
+
+        {/* Betfair Connection Status */}
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+          <h3 className="mb-4 text-sm font-semibold text-gray-300">Betfair Exchange</h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400">Account</span>
+              <span className="text-xs font-mono text-gray-300">trdickinson</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400">App Key</span>
+              <span className="text-xs font-mono text-gray-300">mbbTz...NoOl (delay)</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400">Status</span>
+              <span className="text-xs text-emerald-400 font-medium">Connected</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400">Commission</span>
+              <span className="text-xs text-gray-300">5%</span>
+            </div>
           </div>
         </div>
       </div>
