@@ -38,6 +38,8 @@ class SoccerAdapter(SportAdapter):
         "player_goals",
         "player_shots_on_target",
         "player_soccer_assists",
+        "player_tackles",
+        "player_passes",
     ]
 
     def __init__(self, sport_key: str = "soccer_epl"):
@@ -54,6 +56,8 @@ class SoccerAdapter(SportAdapter):
             "player_goals": "goals",
             "player_shots_on_target": "shots_on_target",
             "player_soccer_assists": "assists",
+            "player_tackles": "tackles",
+            "player_passes": "passes",
         }
 
     def _rate_limit(self):
@@ -151,11 +155,16 @@ class SoccerAdapter(SportAdapter):
             elif stat_key == "shots_on_target":
                 # Approximate: top strikers ~1.5-2.0 SOT per match
                 mean_rate = stats.get("goals_per_match", 0.3) * 3.5
+            elif stat_key == "tackles":
+                mean_rate = 2.5  # Midfielders/defenders average ~2-3 tackles/match
+            elif stat_key == "passes":
+                mean_rate = 45.0  # Average ~40-55 passes/match
             else:
                 mean_rate = 0.3
         else:
             # Fallback defaults for unknown players
-            defaults = {"goals": 0.3, "assists": 0.2, "shots_on_target": 1.2}
+            defaults = {"goals": 0.3, "assists": 0.2, "shots_on_target": 1.2,
+                        "tackles": 2.5, "passes": 45.0}
             mean_rate = defaults.get(stat_key, 0.3)
 
         # Home/away adjustment
@@ -165,11 +174,16 @@ class SoccerAdapter(SportAdapter):
         else:
             mean_rate *= 0.92
 
-        # Poisson model for goals/assists (discrete, low count events)
-        if stat_key in ("goals", "assists"):
+        # Model selection by stat type
+        if stat_key == "passes":
+            # Gaussian for high-volume stats
+            std = mean_rate * 0.25  # ~25% CV for passes
+            z_score = (line + 0.5 - mean_rate) / std
+            prob_over = 1 - scipy_stats.norm.cdf(z_score)
+        elif stat_key in ("goals", "assists", "shots_on_target", "tackles"):
+            # Poisson for discrete, low-to-moderate count events
             prob_over = 1 - scipy_stats.poisson.cdf(int(line), mean_rate)
         else:
-            # Shots on target: use Poisson (close enough for low counts)
             prob_over = 1 - scipy_stats.poisson.cdf(int(line), mean_rate)
 
         prob_over = float(np.clip(prob_over, 0.02, 0.98))

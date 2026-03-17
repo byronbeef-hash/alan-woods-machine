@@ -1,8 +1,8 @@
-import type { BetFilters as BetFiltersType } from '../../lib/queries'
+import type { ScanFilters } from '../../lib/queries'
 
-interface BetFiltersProps {
-  filters: BetFiltersType
-  onChange: (filters: BetFiltersType) => void
+interface ScannerFiltersProps {
+  filters: ScanFilters
+  onChange: (filters: ScanFilters) => void
 }
 
 const sports = [
@@ -50,17 +50,16 @@ const tiers = [
   { value: 'MARGINAL', label: 'Marginal' },
 ]
 
-const results = [
-  { value: '', label: 'All Results' },
-  { value: 'WIN', label: 'Win' },
-  { value: 'LOSS', label: 'Loss' },
-  { value: 'PENDING', label: 'Pending' },
+const statuses = [
+  { value: '', label: 'All Status' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'PLACED', label: 'Placed' },
 ]
 
 const selectClass =
   'rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200 focus:border-emerald-500 focus:outline-none'
 
-export function BetFilters({ filters, onChange }: BetFiltersProps) {
+export function ScannerFilters({ filters, onChange }: ScannerFiltersProps) {
   return (
     <div className="flex flex-wrap gap-3">
       <select
@@ -91,12 +90,12 @@ export function BetFilters({ filters, onChange }: BetFiltersProps) {
         ))}
       </select>
       <select
-        value={filters.result || ''}
-        onChange={e => onChange({ ...filters, result: e.target.value || undefined })}
+        value={filters.status || ''}
+        onChange={e => onChange({ ...filters, status: e.target.value || undefined })}
         className={selectClass}
       >
-        {results.map(r => (
-          <option key={r.value} value={r.value}>{r.label}</option>
+        {statuses.map(s => (
+          <option key={s.value} value={s.value}>{s.label}</option>
         ))}
       </select>
     </div>

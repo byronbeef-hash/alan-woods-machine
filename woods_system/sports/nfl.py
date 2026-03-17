@@ -39,6 +39,8 @@ class NFLAdapter(SportAdapter):
         "player_reception_yds",
         "player_pass_tds",
         "player_anytime_td",
+        "player_receptions",
+        "player_rush_attempts",
     ]
 
     STAT_MAP = {
@@ -47,6 +49,8 @@ class NFLAdapter(SportAdapter):
         "player_reception_yds": "receiving_yards",
         "player_pass_tds": "passing_tds",
         "player_anytime_td": "total_tds",
+        "player_receptions": "receptions",
+        "player_rush_attempts": "carries",
     }
 
     def __init__(self):
@@ -62,6 +66,8 @@ class NFLAdapter(SportAdapter):
             "player_reception_yds": "receiving_yards",
             "player_pass_tds": "passing_tds",
             "player_anytime_td": "total_tds",
+            "player_receptions": "receptions",
+            "player_rush_attempts": "carries",
         }
 
     def _get_current_season(self) -> int:
@@ -132,6 +138,10 @@ class NFLAdapter(SportAdapter):
                 player_df[["passing_tds", "rushing_tds"]].sum(axis=1).mean()
                 if "passing_tds" in player_df else 0
             ),
+            "receptions_mean": player_df["receptions"].mean() if "receptions" in player_df else 0,
+            "receptions_std": player_df["receptions"].std() if "receptions" in player_df else 0,
+            "carries_mean": player_df["carries"].mean() if "carries" in player_df else 0,
+            "carries_std": player_df["carries"].std() if "carries" in player_df else 0,
         }
 
         self._player_cache[player_name] = profile
@@ -169,6 +179,8 @@ class NFLAdapter(SportAdapter):
                 "receiving_yards": (55, 28),
                 "passing_tds": (1.7, 1.0),
                 "total_tds": (2.0, 1.2),
+                "receptions": (5.0, 2.5),
+                "carries": (15, 5),
             }
             mean, std = defaults.get(stat_key, (50, 20))
             games = 0

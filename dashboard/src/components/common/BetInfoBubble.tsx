@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import type { Bet } from '../../lib/types'
-import { DEFAULT_COMMISSION_RATE } from '../../lib/types'
+import { DEFAULT_COMMISSION_RATE, DATA_SOURCES, MODEL_METHODOLOGY, SPORT_LABELS } from '../../lib/types'
 import { formatPercent, formatEdge, formatOdds, formatGameTime, formatCurrency, formatBankroll, getMarketLabel } from '../../lib/utils'
 import { TierBadge, ResultBadge } from './Badge'
 import { LiveBadge } from './LiveBadge'
@@ -171,6 +171,28 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
                   color={bet.pnl !== null ? (bet.pnl >= 0 ? 'text-emerald-400' : 'text-red-400') : undefined} />
               </>
             )}
+
+            {/* Methodology & Data Source */}
+            <div className="border-t border-gray-700/50 pt-2" />
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Methodology</span>
+              {bet.sport && (
+                <Row label="Sport" value={SPORT_LABELS[bet.sport] || bet.sport} />
+              )}
+              {bet.sport && DATA_SOURCES[bet.sport] && (
+                <Row label="Data Source" value={DATA_SOURCES[bet.sport]} />
+              )}
+              {MODEL_METHODOLOGY[bet.market] && (
+                <div className="mt-1">
+                  <span className="text-[10px] text-gray-500">Model</span>
+                  <p className="mt-0.5 text-[10px] leading-relaxed text-gray-400">
+                    {MODEL_METHODOLOGY[bet.market]}
+                  </p>
+                </div>
+              )}
+              <Row label="Sizing" value="Quarter-Kelly (25%)" />
+              <Row label="Commission" value={formatPercent(commission)} color="text-gray-400" />
+            </div>
           </div>
         </div>,
         document.body

@@ -1,5 +1,6 @@
 import { format, parseISO } from 'date-fns'
 import type { Bet, MarketStats } from './types'
+import { MARKET_LABELS } from './types'
 
 export function formatCurrency(value: number): string {
   const sign = value >= 0 ? '+' : ''
@@ -46,13 +47,7 @@ function formatToBrisbane(date: Date, fmt: string): string {
 }
 
 export function getMarketLabel(market: string): string {
-  const labels: Record<string, string> = {
-    player_points: 'Points',
-    player_rebounds: 'Rebounds',
-    player_assists: 'Assists',
-    player_threes: 'Threes',
-  }
-  return labels[market] || market
+  return MARKET_LABELS[market] || market
 }
 
 export function computeMarketStats(bets: Bet[]): MarketStats[] {

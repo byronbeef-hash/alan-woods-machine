@@ -315,6 +315,93 @@ class Database:
             print(f"  [Supabase] Error setting config {key}: {e}")
             return False
 
+    # -------------------------------------------------------------------------
+    # Scan Results (scanner page + auto-placement)
+    # -------------------------------------------------------------------------
+
+    def insert_scan_results(self, results: list[dict], scan_id: str) -> int:
+        """Batch insert scan results. Returns count inserted."""
+        if not self.enabled or not results:
+            return 0
+
+        records = []
+        for r in results:
+            records.append({
+                "scan_id": scan_id,
+                "sport": r.get("sport", ""),
+                "player": r.get("player", ""),
+                "market": r.get("market", ""),
+                "stat": r.get("market", "").replace("player_", "").upper(),
+                "side": r.get("side", "Over"),
+                "line": r.get("line", 0),
+                "odds_american": r.get("odds_american"),
+                "odds_decimal": r.get("odds_decimal"),
+                "model_prob": r.get("model_prob"),
+                "market_implied": r.get("market_implied"),
+                "edge": r.get("edge"),
+                "tier": r.get("tier"),
+                "confidence": r.get("confidence"),
+                "kelly_pct": r.get("kelly_pct"),
+                "suggested_bet_size": r.get("bet_size"),
+                "home_team": r.get("home_team"),
+                "away_team": r.get("away_team"),
+                "game_time": r.get("game_time"),
+                "status": "ACTIVE",
+            })
+
+        try:
+            result = self.client.table("scan_results").insert(records).execute()
+            return len(result.data) if result.data else 0
+        except Exception as e:
+            print(f"  [Supabase] Error inserting scan results: {e}")
+            return 0
+
+    def mark_scan_result_placed(self, scan_result_id: int, bet_id: int):
+        """Mark a scan result as placed with reference to bets table."""
+        if not self.enabled:
+            return
+        try:
+            self.client.table("scan_results").update({
+                "status": "PLACED",
+                "placed_bet_id": bet_id,
+            }).eq("id", scan_result_id).execute()
+        except Exception as e:
+            print(f"  [Supabase] Error marking scan result placed: {e}")
+
+    def expire_old_scan_results(self):
+        """Mark expired scan results (game already started)."""
+        if not self.enabled:
+            return
+        try:
+            self.client.table("scan_results").update({
+                "status": "EXPIRED",
+            }).eq("status", "ACTIVE").lt(
+                "game_time", datetime.now().isoformat()
+            ).execute()
+        except Exception as e:
+            print(f"  [Supabase] Error expiring scan results: {e}")
+
+    def get_active_scan_results(self, sport: str = None, market: str = None) -> list[dict]:
+        """Get active scan results for the dashboard."""
+        if not self.enabled:
+            return []
+        try:
+            query = (
+                self.client.table("scan_results")
+                .select("*")
+                .in_("status", ["ACTIVE", "PLACED"])
+                .order("edge", desc=True)
+            )
+            if sport:
+                query = query.eq("sport", sport)
+            if market:
+                query = query.eq("market", market)
+            result = query.execute()
+            return result.data or []
+        except Exception as e:
+            print(f"  [Supabase] Error fetching scan results: {e}")
+            return []
+
     def get_current_bankroll(self) -> Optional[float]:
         """Get the most recent bankroll value."""
         if not self.enabled:

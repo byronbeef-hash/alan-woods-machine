@@ -15,6 +15,7 @@ Schedule:
 import os
 import sys
 import time
+import uuid
 import signal
 import logging
 from datetime import datetime
@@ -166,6 +167,45 @@ def run_scan_and_bet(sport_key: str = None):
         bet_card = sizer.format_bet_card(bets)
         log.info(bet_card)
 
+        # Write ALL overlays to scan_results (both placed and unplaced)
+        scan_id = str(uuid.uuid4())[:8]
+        from database import Database
+        db = Database()
+
+        # Build scan result records from overlays + sizing info
+        scan_records = []
+        for overlay in overlays:
+            # Find matching sized bet if it exists
+            sized = next(
+                (b for b in bets if b["player"] == overlay["player"]
+                 and b["market"] == overlay["market"]
+                 and b["line"] == overlay["line"]
+                 and not b.get("skip_reason")),
+                None
+            )
+            scan_records.append({
+                "sport": sport_key,
+                "player": overlay["player"],
+                "market": overlay["market"],
+                "side": overlay.get("side", "Over"),
+                "line": overlay["line"],
+                "odds_american": overlay.get("odds_american"),
+                "odds_decimal": overlay.get("odds_decimal"),
+                "model_prob": overlay.get("model_prob"),
+                "market_implied": overlay.get("market_implied"),
+                "edge": overlay.get("edge"),
+                "tier": overlay.get("tier"),
+                "confidence": overlay.get("confidence"),
+                "kelly_pct": sized.get("adjusted_kelly_pct") if sized else None,
+                "bet_size": sized.get("bet_size") if sized else None,
+                "home_team": overlay.get("home_team"),
+                "away_team": overlay.get("away_team"),
+                "game_time": overlay.get("game_time"),
+            })
+
+        inserted = db.insert_scan_results(scan_records, scan_id)
+        log.info(f"  Wrote {inserted} opportunities to scan_results (scan {scan_id})")
+
         # Set up exchange
         if MODE == "live":
             exchange = BetfairExchange()
@@ -182,7 +222,21 @@ def run_scan_and_bet(sport_key: str = None):
                 jersey = adapter.get_player_jersey_number(bet["player"])
                 if jersey:
                     bet["jersey_number"] = jersey
-            tracker.record_bet(bet, sizer.bankroll)
+            record = tracker.record_bet(bet, sizer.bankroll)
+
+            # Link placed bet back to scan_results
+            if record and record.get("id"):
+                # Find matching scan result and mark as PLACED
+                try:
+                    sr = db.client.table("scan_results").select("id").eq(
+                        "scan_id", scan_id
+                    ).eq("player", bet["player"]).eq(
+                        "market", bet["market"]
+                    ).eq("line", bet["line"]).limit(1).execute()
+                    if sr.data:
+                        db.mark_scan_result_placed(sr.data[0]["id"], record["id"])
+                except Exception:
+                    pass
 
         log.info(f"\nPlaced {len(results)} bets ({MODE} mode) [{sport_name}]")
 
@@ -317,6 +371,16 @@ def run_live_monitor_if_game_hours():
         log.exception(f"Live monitor error: {e}")
 
 
+def _expire_scan_results():
+    """Expire old scan results where game has already started."""
+    try:
+        from database import Database
+        db = Database()
+        db.expire_old_scan_results()
+    except Exception as e:
+        log.debug(f"Error expiring scan results: {e}")
+
+
 def run_scan_for_sport(sport_key: str):
     """Wrapper to pass sport_key to the scan pipeline."""
     def _run():
@@ -341,6 +405,7 @@ def start_scheduler():
 
     schedule.every().day.at(RESULTS_TIME).do(run_results_and_report)
     schedule.every(2).minutes.do(run_live_monitor_if_game_hours)
+    schedule.every(1).hours.do(_expire_scan_results)
 
     # Graceful shutdown
     def handle_signal(sig, frame):

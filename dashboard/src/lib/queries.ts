@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Bet, PerformanceSnapshot } from './types'
+import type { Bet, PerformanceSnapshot, ScanResult } from './types'
 
 export async function fetchAllBets(): Promise<Bet[]> {
   const { data, error } = await supabase
@@ -94,4 +94,68 @@ export async function updateSystemConfig(key: string, value: unknown): Promise<v
     .upsert({ key, value, updated_at: new Date().toISOString() })
 
   if (error) throw error
+}
+
+// Scan results
+export interface ScanFilters {
+  sport?: string
+  market?: string
+  tier?: string
+  status?: string
+}
+
+export async function fetchScanResults(filters: ScanFilters = {}): Promise<ScanResult[]> {
+  let query = supabase
+    .from('scan_results')
+    .select('*')
+    .in('status', ['ACTIVE', 'PLACED'])
+    .order('edge', { ascending: false })
+
+  if (filters.sport) query = query.eq('sport', filters.sport)
+  if (filters.market) query = query.eq('market', filters.market)
+  if (filters.tier) query = query.eq('tier', filters.tier)
+  if (filters.status) query = query.eq('status', filters.status)
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data || []) as ScanResult[]
+}
+
+export async function placeBetFromScan(scanResult: ScanResult): Promise<void> {
+  // Insert into bets table
+  const { data: betData, error: betError } = await supabase
+    .from('bets')
+    .insert({
+      player: scanResult.player,
+      market: scanResult.market,
+      stat: scanResult.stat,
+      side: scanResult.side,
+      line: scanResult.line,
+      odds_american: scanResult.odds_american,
+      odds_decimal: scanResult.odds_decimal,
+      model_prob: scanResult.model_prob,
+      market_implied: scanResult.market_implied,
+      edge: scanResult.edge,
+      tier: scanResult.tier,
+      bet_size: scanResult.suggested_bet_size,
+      bankroll_at_bet: null,
+      home_team: scanResult.home_team,
+      away_team: scanResult.away_team,
+      game_time: scanResult.game_time,
+      sport: scanResult.sport,
+      commission_rate: 0.05,
+      result: 'PENDING',
+    })
+    .select('id')
+    .single()
+
+  if (betError) throw betError
+
+  // Mark scan result as placed
+  const { error: updateError } = await supabase
+    .from('scan_results')
+    .update({ status: 'PLACED', placed_bet_id: betData.id })
+    .eq('id', scanResult.id)
+
+  if (updateError) throw updateError
 }

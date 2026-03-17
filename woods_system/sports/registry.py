@@ -27,12 +27,14 @@ def _ensure_registered():
     from .nba import NBAAdapter
     from .soccer import SoccerAdapter
     from .nfl import NFLAdapter
+    from .afl import AFLAdapter
 
     _ADAPTER_MAP = {
         "basketball_nba": NBAAdapter,
         "soccer_epl": SoccerAdapter,
         "soccer_uefa_champions_league": SoccerAdapter,
         "americanfootball_nfl": NFLAdapter,
+        "aussierules_afl": AFLAdapter,
     }
 
 

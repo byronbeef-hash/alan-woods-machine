@@ -25,6 +25,9 @@ class NBAAdapter(SportAdapter):
         "player_rebounds",
         "player_assists",
         "player_threes",
+        "player_steals",
+        "player_blocks",
+        "player_turnovers",
     ]
 
     STAT_MAP = {
@@ -32,6 +35,9 @@ class NBAAdapter(SportAdapter):
         "player_rebounds": "REB",
         "player_assists": "AST",
         "player_threes": "FG3M",
+        "player_steals": "STL",
+        "player_blocks": "BLK",
+        "player_turnovers": "TOV",
     }
 
     def __init__(self):
@@ -45,6 +51,9 @@ class NBAAdapter(SportAdapter):
             "player_rebounds": "reb",
             "player_assists": "ast",
             "player_threes": "fg3m",
+            "player_steals": "stl",
+            "player_blocks": "blk",
+            "player_turnovers": "tov",
         }
 
     def get_player_stats(self, player_name: str) -> dict | None:
