@@ -74,8 +74,16 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
               <span className="text-sm font-semibold text-white">{bet.player}</span>
               <ResultBadge result={bet.result} />
             </div>
+            {(bet.home_team || bet.away_team) && (
+              <div className="mt-1.5 text-xs font-medium text-amber-400">
+                {bet.away_team} @ {bet.home_team}
+              </div>
+            )}
             <div className="mt-1 text-xs text-gray-400">
-              {formatGameTime(bet.created_at)}
+              {bet.game_time
+                ? <>Tip-off: {formatGameTime(bet.game_time)}</>
+                : formatGameTime(bet.created_at)
+              }
             </div>
           </div>
 

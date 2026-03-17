@@ -18,6 +18,9 @@ export interface Bet {
   actual_stat: number | null
   pnl: number | null
   running_bankroll: number | null
+  home_team: string | null
+  away_team: string | null
+  game_time: string | null
   notes: string | null
 }
 

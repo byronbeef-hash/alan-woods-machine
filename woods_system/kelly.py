@@ -95,6 +95,9 @@ class KellyBetSizer:
             "risk_reward": round(potential_profit / bet_size, 2) if bet_size > 0 else 0,
             "bankroll": self.bankroll,
             "bankroll_pct": round((bet_size / self.bankroll) * 100, 2),
+            "home_team": overlay.get("home_team"),
+            "away_team": overlay.get("away_team"),
+            "game_time": overlay.get("game_time"),
         }
 
     def size_all_bets(self, overlays: list[dict]) -> list[dict]:

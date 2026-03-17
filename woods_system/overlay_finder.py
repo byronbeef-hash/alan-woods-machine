@@ -121,6 +121,9 @@ class OverlayFinder:
             "expected_value": pred.get("expected_value", 0),
             "base_mean": pred.get("base_mean", 0),
             "adjustments": pred.get("adjustments", {}),
+            "home_team": pred.get("home_team"),
+            "away_team": pred.get("away_team"),
+            "game_time": pred.get("game_time"),
         }
 
     def format_overlay_report(self, overlays: list[dict]) -> str:

@@ -28,6 +28,7 @@ export function RecentBets({ bets }: RecentBetsProps) {
           <thead>
             <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
               <th className="px-4 py-2.5">Time</th>
+              <th className="px-4 py-2.5">Game</th>
               <th className="px-4 py-2.5">Player</th>
               <th className="px-4 py-2.5">Market</th>
               <th className="px-4 py-2.5">Play</th>
@@ -44,6 +45,11 @@ export function RecentBets({ bets }: RecentBetsProps) {
               <tr key={bet.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
                 <td className="px-4 py-2.5 text-xs text-gray-400">
                   {formatDateTime(bet.created_at)}
+                </td>
+                <td className="px-4 py-2.5 text-xs text-amber-400">
+                  {bet.home_team && bet.away_team
+                    ? `${bet.away_team} @ ${bet.home_team}`
+                    : '—'}
                 </td>
                 <td className="px-4 py-2.5 font-medium text-white">
                   <BetInfoBubble bet={bet}>

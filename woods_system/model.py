@@ -287,6 +287,10 @@ class PropModel:
 
                 pred["over_odds_decimal"] = prop["odds_decimal"]
                 pred["over_odds_american"] = prop["odds_american"]
+                # Pass through game context
+                pred["home_team"] = prop.get("home_team")
+                pred["away_team"] = prop.get("away_team")
+                pred["game_time"] = prop.get("game_time")
                 predictions.append(pred)
 
         return predictions

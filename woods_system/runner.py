@@ -84,6 +84,10 @@ def run_scan_and_bet():
                     key = (p["player"], p["market"], p["side"], p["line"])
                     if key not in seen:
                         seen.add(key)
+                        # Attach game context to each prop
+                        p["home_team"] = game.get("home_team")
+                        p["away_team"] = game.get("away_team")
+                        p["game_time"] = game.get("commence_time")
                         all_props.append(p)
 
         players = set(p["player"] for p in all_props if p["side"] == "Over")
