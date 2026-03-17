@@ -3,6 +3,7 @@ import type { Bet } from '../../lib/types'
 import { formatCurrency, formatOdds, formatDate, formatEdge, formatPercent, getMarketLabel } from '../../lib/utils'
 import { TierBadge, ResultBadge } from '../common/Badge'
 import { BetInfoBubble } from '../common/BetInfoBubble'
+import { LiveBadge } from '../common/LiveBadge'
 
 interface BetsTableProps {
   bets: Bet[]
@@ -52,6 +53,7 @@ export function BetsTable({ bets }: BetsTableProps) {
             <th className="cursor-pointer px-4 py-2.5 hover:text-gray-300" onClick={() => handleSort('created_at')}>
               Date{sortIcon('created_at')}
             </th>
+            <th className="px-4 py-2.5">Status</th>
             <th className="cursor-pointer px-4 py-2.5 hover:text-gray-300" onClick={() => handleSort('player')}>
               Player{sortIcon('player')}
             </th>
@@ -79,16 +81,24 @@ export function BetsTable({ bets }: BetsTableProps) {
           {sorted.map(bet => (
             <tr key={bet.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
               <td className="px-4 py-2.5 text-xs text-gray-400">{formatDate(bet.created_at)}</td>
+              <td className="px-4 py-2.5">
+                <LiveBadge gameStatus={bet.game_status} gameClock={bet.game_clock} />
+              </td>
               <td className="px-4 py-2.5 font-medium text-white">
                 <BetInfoBubble bet={bet}>
-                  <span className="cursor-pointer underline decoration-gray-600 underline-offset-2 hover:decoration-gray-400">{bet.player}</span>
+                  <span className="cursor-pointer underline decoration-gray-600 underline-offset-2 hover:decoration-gray-400">
+                    {bet.jersey_number && <span className="text-gray-500 font-mono text-xs mr-1">#{bet.jersey_number}</span>}
+                    {bet.player}
+                  </span>
                 </BetInfoBubble>
               </td>
               <td className="px-4 py-2.5 text-gray-300">{getMarketLabel(bet.market)}</td>
               <td className="px-4 py-2.5 text-gray-300">{bet.side} {bet.line}</td>
               <td className="px-4 py-2.5 text-gray-300">{formatOdds(bet.odds_american)}</td>
               <td className="px-4 py-2.5 font-mono text-xs text-cyan-400">
-                {bet.model_prob !== null ? formatPercent(bet.model_prob) : '—'}
+                {bet.live_model_prob !== null && bet.result === 'PENDING'
+                  ? formatPercent(bet.live_model_prob)
+                  : bet.model_prob !== null ? formatPercent(bet.model_prob) : '—'}
               </td>
               <td className="px-4 py-2.5 font-mono text-xs text-emerald-400">
                 {bet.edge !== null ? formatEdge(bet.edge) : '—'}

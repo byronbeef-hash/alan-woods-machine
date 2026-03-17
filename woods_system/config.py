@@ -18,7 +18,12 @@ ODDS_API_KEY = "YOUR_API_KEY_HERE"
 STARTING_BANKROLL = 5000.0       # Starting paper-trade bankroll in USD
 KELLY_FRACTION = 0.25            # Quarter-Kelly (conservative; Alan used 2/3)
 MIN_EDGE_THRESHOLD = 0.03        # Minimum 3% edge to place a bet
-MAX_BET_FRACTION = 0.05          # Never bet more than 5% of bankroll on one play
+MAX_BET_FRACTION = 0.10          # Hard cap: never bet more than 10% of bankroll
+MAX_BET_BY_TIER = {              # Tiered caps based on edge strength
+    "STRONG":   0.10,            # Up to 10% for 8%+ edge
+    "MODERATE": 0.06,            # Up to 6% for 5-8% edge
+    "MARGINAL": 0.03,            # Up to 3% for 3-5% edge
+}
 MIN_BET_SIZE = 10.0              # Minimum bet size in USD
 
 # =============================================================================

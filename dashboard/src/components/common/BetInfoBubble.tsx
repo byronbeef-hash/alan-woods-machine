@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { Bet } from '../../lib/types'
 import { formatPercent, formatEdge, formatOdds, formatGameTime, formatCurrency, formatBankroll, getMarketLabel } from '../../lib/utils'
 import { TierBadge, ResultBadge } from './Badge'
+import { LiveBadge } from './LiveBadge'
 
 interface BetInfoBubbleProps {
   bet: Bet
@@ -18,7 +19,7 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
-    const bubbleHeight = 480
+    const bubbleHeight = 560
     const spaceBelow = window.innerHeight - rect.bottom
     const top = spaceBelow < bubbleHeight ? rect.top - bubbleHeight - 4 : rect.bottom + 4
     setPos({ top, left: rect.left })
@@ -43,15 +44,15 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
     : null
   const quarterKelly = kellyFraction !== null ? kellyFraction * 0.25 : null
 
-  // Estimated win value: profit if bet wins = bet_size * (odds_decimal - 1)
   const estimatedWin = bet.bet_size !== null && bet.odds_decimal !== null
     ? bet.bet_size * (bet.odds_decimal - 1)
     : null
 
-  // Expected value: (model_prob * win_amount) - ((1 - model_prob) * bet_size)
   const expectedValue = bet.model_prob !== null && bet.bet_size !== null && bet.odds_decimal !== null
     ? (bet.model_prob * bet.bet_size * (bet.odds_decimal - 1)) - ((1 - bet.model_prob) * bet.bet_size)
     : null
+
+  const isLive = bet.game_status?.startsWith('LIVE_')
 
   return (
     <>
@@ -71,12 +72,22 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
           {/* Header */}
           <div className="border-b border-gray-700 px-4 py-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-white">{bet.player}</span>
+              <span className="text-sm font-semibold text-white">
+                {bet.jersey_number && <span className="text-gray-400 mr-1">#{bet.jersey_number}</span>}
+                {bet.player}
+              </span>
               <ResultBadge result={bet.result} />
             </div>
             {(bet.home_team || bet.away_team) && (
-              <div className="mt-1.5 text-xs font-medium text-amber-400">
-                {bet.away_team} @ {bet.home_team}
+              <div className="mt-1.5 flex items-center gap-2">
+                <span className="text-xs font-medium text-amber-400">
+                  {bet.away_team}
+                  {bet.away_score !== null && <span className="ml-1 text-white">{bet.away_score}</span>}
+                  {' @ '}
+                  {bet.home_team}
+                  {bet.home_score !== null && <span className="ml-1 text-white">{bet.home_score}</span>}
+                </span>
+                <LiveBadge gameStatus={bet.game_status} gameClock={bet.game_clock} />
               </div>
             )}
             <div className="mt-1 text-xs text-gray-400">
@@ -86,6 +97,31 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
               }
             </div>
           </div>
+
+          {/* Live Data Section */}
+          {isLive && (
+            <div className="border-b border-gray-700 bg-emerald-900/10 px-4 py-2.5 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                </span>
+                <span className="text-xs font-semibold text-emerald-400">LIVE</span>
+              </div>
+              {bet.live_stat !== null && (
+                <Row label={`Current ${getMarketLabel(bet.market)}`} value={String(bet.live_stat)} color="text-white" />
+              )}
+              {bet.live_model_prob !== null && (
+                <Row label="Live Win Prob" value={formatPercent(bet.live_model_prob)}
+                  color={bet.live_model_prob > (bet.model_prob ?? 0) ? 'text-emerald-400' : 'text-red-400'} />
+              )}
+              {bet.live_model_prob !== null && bet.model_prob !== null && (
+                <Row label="Change from Open"
+                  value={`${bet.live_model_prob > bet.model_prob ? '+' : ''}${formatEdge(bet.live_model_prob - bet.model_prob)}`}
+                  color={bet.live_model_prob > bet.model_prob ? 'text-emerald-400' : 'text-red-400'} />
+              )}
+            </div>
+          )}
 
           {/* Bet Details */}
           <div className="px-4 py-3 space-y-2">

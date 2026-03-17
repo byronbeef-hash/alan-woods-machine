@@ -65,6 +65,7 @@ class Database:
             "home_team": bet.get("home_team"),
             "away_team": bet.get("away_team"),
             "game_time": bet.get("game_time"),
+            "jersey_number": bet.get("jersey_number"),
             "result": "PENDING",
             "actual_stat": None,
             "pnl": None,
@@ -188,6 +189,66 @@ class Database:
             }).execute()
         except Exception as e:
             print(f"  [Supabase] Error saving snapshot: {e}")
+
+    def update_live_data(self, bet_id: int, updates: dict):
+        """Update live game data fields on a bet."""
+        if not self.enabled:
+            return
+
+        try:
+            self.client.table("bets").update(updates).eq("id", bet_id).execute()
+        except Exception as e:
+            print(f"  [Supabase] Error updating live data for bet {bet_id}: {e}")
+
+    def settle_bet(self, bet_id: int, actual_stat: float) -> Optional[dict]:
+        """Settle a specific bet by ID with the final actual stat."""
+        if not self.enabled:
+            return None
+
+        try:
+            result = (
+                self.client.table("bets")
+                .select("*")
+                .eq("id", bet_id)
+                .eq("result", "PENDING")
+                .limit(1)
+                .execute()
+            )
+
+            if not result.data:
+                return None
+
+            row = result.data[0]
+            side = row["side"]
+            line = float(row["line"])
+            bet_size = float(row["bet_size"])
+            odds_decimal = float(row["odds_decimal"])
+            bankroll_at_bet = float(row["bankroll_at_bet"])
+
+            won = (actual_stat > line) if side == "Over" else (actual_stat < line)
+            pnl = bet_size * (odds_decimal - 1) if won else -bet_size
+            running_bankroll = bankroll_at_bet + pnl
+
+            self.client.table("bets").update({
+                "result": "WIN" if won else "LOSS",
+                "actual_stat": actual_stat,
+                "pnl": round(pnl, 2),
+                "running_bankroll": round(running_bankroll, 2),
+                "game_status": "FINAL",
+                "settled_at": datetime.now().isoformat(),
+            }).eq("id", bet_id).execute()
+
+            return {
+                "id": bet_id,
+                "result": "WIN" if won else "LOSS",
+                "actual_stat": actual_stat,
+                "pnl": round(pnl, 2),
+                "running_bankroll": round(running_bankroll, 2),
+            }
+
+        except Exception as e:
+            print(f"  [Supabase] Error settling bet {bet_id}: {e}")
+            return None
 
     def get_current_bankroll(self) -> Optional[float]:
         """Get the most recent bankroll value."""

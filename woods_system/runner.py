@@ -30,6 +30,7 @@ from overlay_finder import OverlayFinder
 from kelly import KellyBetSizer
 from tracker import BetTracker
 from auto_bettor import AutoBettor, DryRunExchange, BetfairExchange
+from live_monitor import run_live_monitor
 from notifications import NotificationManager
 import config
 
@@ -128,8 +129,12 @@ def run_scan_and_bet():
         bettor = AutoBettor(exchange=exchange, notifier=notifier)
         results = bettor.execute_bet_card(bets)
 
-        # Record bets in tracker
+        # Look up jersey numbers and record bets
+        stats_engine = PlayerStatsEngine()
         for bet in bets:
+            player_id = stats_engine.get_player_id(bet["player"])
+            if player_id:
+                bet["jersey_number"] = stats_engine.get_player_jersey_number(player_id)
             tracker.record_bet(bet, sizer.bankroll)
 
         log.info(f"\nPlaced {len(results)} bets ({MODE} mode)")
@@ -246,6 +251,16 @@ def run_backtest_demo():
 
 # ─── Scheduler ────────────────────────────────────────────────────────────────
 
+def run_live_monitor_if_game_hours():
+    """Run live monitor only during NBA game hours (6 PM – 1 AM ET)."""
+    hour = datetime.now().hour
+    if 18 <= hour or hour < 1:
+        try:
+            run_live_monitor()
+        except Exception as e:
+            log.exception(f"Live monitor error: {e}")
+
+
 def start_scheduler():
     """Start the scheduled runner. Runs indefinitely until killed."""
     log.info("=" * 60)
@@ -253,10 +268,12 @@ def start_scheduler():
     log.info(f"Mode: {MODE.upper()}")
     log.info(f"Scan time: {SCAN_TIME} ET")
     log.info(f"Results time: {RESULTS_TIME} ET")
+    log.info(f"Live monitor: every 2 min during game hours (6 PM – 1 AM ET)")
     log.info("=" * 60)
 
     schedule.every().day.at(SCAN_TIME).do(run_scan_and_bet)
     schedule.every().day.at(RESULTS_TIME).do(run_results_and_report)
+    schedule.every(2).minutes.do(run_live_monitor_if_game_hours)
 
     # Graceful shutdown
     def handle_signal(sig, frame):
@@ -286,11 +303,13 @@ def main():
             run_results_and_report()
         elif cmd == "backtest":
             run_backtest_demo()
+        elif cmd == "live":
+            run_live_monitor()
         elif cmd == "schedule":
             start_scheduler()
         else:
             print(f"Unknown command: {cmd}")
-            print("Usage: python runner.py [scan|results|backtest|schedule]")
+            print("Usage: python runner.py [scan|results|backtest|live|schedule]")
     elif RUN_ONCE:
         # Single run mode (useful for cloud functions / cron)
         run_scan_and_bet()

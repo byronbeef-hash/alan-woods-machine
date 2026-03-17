@@ -19,6 +19,8 @@ try:
         commonallplayers,
         scoreboardv2,
         playerdashboardbygeneralsplits,
+        commonplayerinfo,
+        boxscoretraditionalv2,
     )
     from nba_api.stats.static import players as nba_players
     from nba_api.stats.static import teams as nba_teams
@@ -55,6 +57,111 @@ class PlayerStatsEngine:
             if len(matches) == 1:
                 return matches[0]["id"]
         return None
+
+    def get_player_jersey_number(self, player_id: int) -> str | None:
+        """Look up a player's jersey number via CommonPlayerInfo."""
+        if not NBA_API_AVAILABLE:
+            return None
+
+        cache_key = f"jersey_{player_id}"
+        if cache_key in self.player_cache:
+            return self.player_cache[cache_key]
+
+        try:
+            time.sleep(0.6)
+            info = commonplayerinfo.CommonPlayerInfo(player_id=player_id)
+            df = info.get_data_frames()[0]
+            if not df.empty and "JERSEY" in df.columns:
+                jersey = str(df.iloc[0]["JERSEY"]) if pd.notna(df.iloc[0]["JERSEY"]) else None
+                self.player_cache[cache_key] = jersey
+                return jersey
+        except Exception as e:
+            print(f"Error fetching jersey for player {player_id}: {e}")
+        return None
+
+    def get_live_scoreboard(self) -> list[dict]:
+        """Fetch today's live scoreboard from NBA API."""
+        if not NBA_API_AVAILABLE:
+            return []
+
+        try:
+            time.sleep(0.6)
+            sb = scoreboardv2.ScoreboardV2()
+            games_df = sb.get_data_frames()[0]  # GameHeader
+            line_score_df = sb.get_data_frames()[1]  # LineScore
+
+            games = []
+            for _, game in games_df.iterrows():
+                game_id = game["GAME_ID"]
+                status = game.get("GAME_STATUS_TEXT", "")
+                home_id = game.get("HOME_TEAM_ID")
+                away_id = game.get("VISITOR_TEAM_ID")
+
+                # Get scores from LineScore
+                home_score = 0
+                away_score = 0
+                for _, ls in line_score_df[line_score_df["GAME_ID"] == game_id].iterrows():
+                    if ls["TEAM_ID"] == home_id:
+                        home_score = int(ls.get("PTS", 0) or 0)
+                    elif ls["TEAM_ID"] == away_id:
+                        away_score = int(ls.get("PTS", 0) or 0)
+
+                # Map NBA API status to our game_status values
+                game_status_id = game.get("GAME_STATUS_ID", 1)
+                if game_status_id == 1:
+                    game_status = "SCHEDULED"
+                elif game_status_id == 3:
+                    game_status = "FINAL"
+                else:
+                    # Live — parse period from LIVE_PERIOD
+                    period = game.get("LIVE_PERIOD", 1)
+                    clock = game.get("LIVE_PC_TIME", "")
+                    if period <= 4:
+                        game_status = f"LIVE_Q{period}"
+                    else:
+                        game_status = "LIVE_OT"
+
+                games.append({
+                    "game_id": game_id,
+                    "game_status": game_status,
+                    "game_clock": status.strip(),
+                    "home_team_id": home_id,
+                    "away_team_id": away_id,
+                    "home_team": game.get("HOME_TEAM_NAME", ""),
+                    "away_team": game.get("VISITOR_TEAM_NAME", ""),
+                    "home_score": home_score,
+                    "away_score": away_score,
+                })
+            return games
+        except Exception as e:
+            print(f"Error fetching scoreboard: {e}")
+            return []
+
+    def get_player_box_score(self, game_id: str, player_name: str) -> dict | None:
+        """Get a player's current in-game box score stats."""
+        if not NBA_API_AVAILABLE:
+            return None
+
+        try:
+            time.sleep(0.6)
+            box = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
+            players_df = box.get_data_frames()[0]
+
+            for _, row in players_df.iterrows():
+                full_name = row.get("PLAYER_NAME", "")
+                if full_name.lower() == player_name.lower():
+                    return {
+                        "player": full_name,
+                        "minutes": row.get("MIN", "0"),
+                        "pts": int(row.get("PTS", 0) or 0),
+                        "reb": int(row.get("REB", 0) or 0),
+                        "ast": int(row.get("AST", 0) or 0),
+                        "fg3m": int(row.get("FG3M", 0) or 0),
+                    }
+            return None
+        except Exception as e:
+            print(f"Error fetching box score for {player_name}: {e}")
+            return None
 
     def get_player_game_log(self, player_id: int, season: str = None) -> pd.DataFrame:
         """

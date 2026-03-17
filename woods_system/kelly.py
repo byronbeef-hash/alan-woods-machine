@@ -65,13 +65,15 @@ class KellyBetSizer:
         # Apply fractional Kelly
         adjusted_kelly = full_kelly * self.kelly_fraction
 
-        # Apply maximum bet cap
-        adjusted_kelly = min(adjusted_kelly, config.MAX_BET_FRACTION)
+        # Apply tier-based maximum bet cap
+        tier = overlay.get("tier", "MARGINAL")
+        tier_cap = config.MAX_BET_BY_TIER.get(tier, config.MAX_BET_FRACTION)
+        adjusted_kelly = min(adjusted_kelly, tier_cap)
 
         # Calculate actual bet size
         bet_size = self.bankroll * adjusted_kelly
         bet_size = max(bet_size, config.MIN_BET_SIZE)  # Floor
-        bet_size = min(bet_size, self.bankroll * config.MAX_BET_FRACTION)  # Cap
+        bet_size = min(bet_size, self.bankroll * tier_cap)  # Cap
 
         # Round to clean dollar amount
         bet_size = round(bet_size, 0)

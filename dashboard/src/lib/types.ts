@@ -21,6 +21,14 @@ export interface Bet {
   home_team: string | null
   away_team: string | null
   game_time: string | null
+  jersey_number: string | null
+  game_status: string | null
+  home_score: number | null
+  away_score: number | null
+  game_clock: string | null
+  live_stat: number | null
+  live_model_prob: number | null
+  settled_at: string | null
   notes: string | null
 }
 
