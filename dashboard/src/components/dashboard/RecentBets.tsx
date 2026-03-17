@@ -1,6 +1,7 @@
 import type { Bet } from '../../lib/types'
-import { formatCurrency, formatOdds, formatDateTime, getMarketLabel } from '../../lib/utils'
+import { formatCurrency, formatOdds, formatDateTime, formatPercent, formatEdge, getMarketLabel } from '../../lib/utils'
 import { TierBadge, ResultBadge } from '../common/Badge'
+import { BetInfoBubble } from '../common/BetInfoBubble'
 
 interface RecentBetsProps {
   bets: Bet[]
@@ -31,6 +32,8 @@ export function RecentBets({ bets }: RecentBetsProps) {
               <th className="px-4 py-2.5">Market</th>
               <th className="px-4 py-2.5">Play</th>
               <th className="px-4 py-2.5">Odds</th>
+              <th className="px-4 py-2.5">Win Prob</th>
+              <th className="px-4 py-2.5">Edge</th>
               <th className="px-4 py-2.5">Tier</th>
               <th className="px-4 py-2.5">Result</th>
               <th className="px-4 py-2.5 text-right">P&L</th>
@@ -42,12 +45,22 @@ export function RecentBets({ bets }: RecentBetsProps) {
                 <td className="px-4 py-2.5 text-xs text-gray-400">
                   {formatDateTime(bet.created_at)}
                 </td>
-                <td className="px-4 py-2.5 font-medium text-white">{bet.player}</td>
+                <td className="px-4 py-2.5 font-medium text-white">
+                  <BetInfoBubble bet={bet}>
+                    <span className="cursor-pointer underline decoration-gray-600 underline-offset-2 hover:decoration-gray-400">{bet.player}</span>
+                  </BetInfoBubble>
+                </td>
                 <td className="px-4 py-2.5 text-gray-300">{getMarketLabel(bet.market)}</td>
                 <td className="px-4 py-2.5 text-gray-300">
                   {bet.side} {bet.line}
                 </td>
                 <td className="px-4 py-2.5 text-gray-300">{formatOdds(bet.odds_american)}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-cyan-400">
+                  {bet.model_prob !== null ? formatPercent(bet.model_prob) : '—'}
+                </td>
+                <td className="px-4 py-2.5 font-mono text-xs text-emerald-400">
+                  {bet.edge !== null ? formatEdge(bet.edge) : '—'}
+                </td>
                 <td className="px-4 py-2.5">{bet.tier && <TierBadge tier={bet.tier} />}</td>
                 <td className="px-4 py-2.5"><ResultBadge result={bet.result} /></td>
                 <td className="px-4 py-2.5 text-right font-mono text-xs">

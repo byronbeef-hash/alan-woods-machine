@@ -24,11 +24,25 @@ export function formatOdds(american: number | null): string {
 }
 
 export function formatDate(dateStr: string): string {
-  return format(parseISO(dateStr), 'MMM d, yyyy')
+  const date = parseISO(dateStr)
+  return formatToBrisbane(date, 'MMM d, yyyy')
 }
 
 export function formatDateTime(dateStr: string): string {
-  return format(parseISO(dateStr), 'MMM d, h:mm a')
+  const date = parseISO(dateStr)
+  return formatToBrisbane(date, 'MMM d, h:mm a')
+}
+
+export function formatGameTime(dateStr: string): string {
+  const date = parseISO(dateStr)
+  return formatToBrisbane(date, 'EEE MMM d, h:mm a') + ' AEST'
+}
+
+function formatToBrisbane(date: Date, fmt: string): string {
+  // Brisbane is UTC+10 (no daylight saving)
+  const utc = date.getTime() + date.getTimezoneOffset() * 60000
+  const brisbane = new Date(utc + 10 * 3600000)
+  return format(brisbane, fmt)
 }
 
 export function getMarketLabel(market: string): string {

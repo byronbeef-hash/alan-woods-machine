@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Bet } from '../../lib/types'
 import { formatCurrency, formatOdds, formatDate, formatEdge, formatPercent, getMarketLabel } from '../../lib/utils'
 import { TierBadge, ResultBadge } from '../common/Badge'
+import { BetInfoBubble } from '../common/BetInfoBubble'
 
 interface BetsTableProps {
   bets: Bet[]
@@ -59,7 +60,7 @@ export function BetsTable({ bets }: BetsTableProps) {
             </th>
             <th className="px-4 py-2.5">Play</th>
             <th className="px-4 py-2.5">Odds</th>
-            <th className="px-4 py-2.5">Model</th>
+            <th className="px-4 py-2.5">Win Prob</th>
             <th className="cursor-pointer px-4 py-2.5 hover:text-gray-300" onClick={() => handleSort('edge')}>
               Edge{sortIcon('edge')}
             </th>
@@ -78,11 +79,15 @@ export function BetsTable({ bets }: BetsTableProps) {
           {sorted.map(bet => (
             <tr key={bet.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
               <td className="px-4 py-2.5 text-xs text-gray-400">{formatDate(bet.created_at)}</td>
-              <td className="px-4 py-2.5 font-medium text-white">{bet.player}</td>
+              <td className="px-4 py-2.5 font-medium text-white">
+                <BetInfoBubble bet={bet}>
+                  <span className="cursor-pointer underline decoration-gray-600 underline-offset-2 hover:decoration-gray-400">{bet.player}</span>
+                </BetInfoBubble>
+              </td>
               <td className="px-4 py-2.5 text-gray-300">{getMarketLabel(bet.market)}</td>
               <td className="px-4 py-2.5 text-gray-300">{bet.side} {bet.line}</td>
               <td className="px-4 py-2.5 text-gray-300">{formatOdds(bet.odds_american)}</td>
-              <td className="px-4 py-2.5 font-mono text-xs text-gray-300">
+              <td className="px-4 py-2.5 font-mono text-xs text-cyan-400">
                 {bet.model_prob !== null ? formatPercent(bet.model_prob) : '—'}
               </td>
               <td className="px-4 py-2.5 font-mono text-xs text-emerald-400">
