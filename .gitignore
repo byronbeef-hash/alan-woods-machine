@@ -25,3 +25,6 @@ woods_system/data/*.pkl
 # OS
 .DS_Store
 Thumbs.db
+dashboard/.env
+dashboard/node_modules/
+dashboard/dist/
