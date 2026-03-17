@@ -12,8 +12,9 @@ We default to quarter-Kelly (more conservative) because:
 3. You still capture ~50% of theoretical optimal growth
 4. It gives you more runway to learn and refine
 
-The formula:
-    Kelly % = (edge / (odds - 1))
+The formula (commission-adjusted):
+    effective_b = (odds - 1) × (1 - commission_rate)
+    Kelly % = (effective_b × p - q) / effective_b
     Adjusted Kelly % = Kelly % × KELLY_FRACTION
     Bet size = Adjusted Kelly % × Bankroll
 
@@ -31,6 +32,7 @@ class KellyBetSizer:
     def __init__(self, bankroll: float = None):
         self.bankroll = bankroll or config.STARTING_BANKROLL
         self.kelly_fraction = config.KELLY_FRACTION
+        self.commission_rate = config.COMMISSION_RATE
 
     def size_bet(self, overlay: dict) -> dict:
         """
@@ -46,16 +48,18 @@ class KellyBetSizer:
         model_prob = overlay["model_prob"]
         odds_decimal = overlay["odds_decimal"]
 
-        # Full Kelly formula: f* = (bp - q) / b
-        # where b = decimal odds - 1, p = win probability, q = 1 - p
+        # Full Kelly formula with commission adjustment:
+        # b = decimal odds - 1, effective_b = b × (1 - commission)
+        # f* = (effective_b × p - q) / effective_b
         b = odds_decimal - 1
+        effective_b = b * (1 - self.commission_rate)
         p = model_prob
         q = 1 - p
 
-        if b <= 0:
+        if effective_b <= 0:
             return self._no_bet(overlay, "Invalid odds")
 
-        full_kelly = (b * p - q) / b
+        full_kelly = (effective_b * p - q) / effective_b
 
         # If Kelly is negative, there's no edge (shouldn't happen if
         # overlay_finder did its job, but safety check)
@@ -78,7 +82,7 @@ class KellyBetSizer:
         # Round to clean dollar amount
         bet_size = round(bet_size, 0)
 
-        potential_profit = bet_size * b
+        potential_profit = bet_size * effective_b
 
         return {
             "player": overlay["player"],
@@ -124,7 +128,7 @@ class KellyBetSizer:
                 if remaining >= config.MIN_BET_SIZE:
                     bet["bet_size"] = round(remaining, 0)
                     bet["potential_profit"] = round(
-                        bet["bet_size"] * (bet["odds_decimal"] - 1), 2
+                        bet["bet_size"] * (bet["odds_decimal"] - 1) * (1 - self.commission_rate), 2
                     )
                     bet["bankroll_pct"] = round(
                         (bet["bet_size"] / self.bankroll) * 100, 2

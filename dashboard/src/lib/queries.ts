@@ -47,6 +47,7 @@ export interface BetFilters {
   market?: string
   tier?: string
   result?: string
+  sport?: string
   dateFrom?: string
   dateTo?: string
 }
@@ -57,6 +58,7 @@ export async function fetchFilteredBets(filters: BetFilters): Promise<Bet[]> {
   if (filters.market) query = query.eq('market', filters.market)
   if (filters.tier) query = query.eq('tier', filters.tier)
   if (filters.result) query = query.eq('result', filters.result)
+  if (filters.sport) query = query.eq('sport', filters.sport)
   if (filters.dateFrom) query = query.gte('created_at', filters.dateFrom)
   if (filters.dateTo) query = query.lte('created_at', filters.dateTo)
 
@@ -64,4 +66,32 @@ export async function fetchFilteredBets(filters: BetFilters): Promise<Bet[]> {
 
   if (error) throw error
   return (data || []) as Bet[]
+}
+
+// System config
+export interface SystemConfigRow {
+  key: string
+  value: unknown
+  updated_at: string
+}
+
+export async function fetchSystemConfig(): Promise<Record<string, unknown>> {
+  const { data, error } = await supabase
+    .from('system_config')
+    .select('key, value')
+
+  if (error) throw error
+  const cfg: Record<string, unknown> = {}
+  for (const row of data || []) {
+    cfg[row.key] = row.value
+  }
+  return cfg
+}
+
+export async function updateSystemConfig(key: string, value: unknown): Promise<void> {
+  const { error } = await supabase
+    .from('system_config')
+    .upsert({ key, value, updated_at: new Date().toISOString() })
+
+  if (error) throw error
 }

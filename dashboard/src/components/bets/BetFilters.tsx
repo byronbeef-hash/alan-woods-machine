@@ -5,12 +5,31 @@ interface BetFiltersProps {
   onChange: (filters: BetFiltersType) => void
 }
 
+const sports = [
+  { value: '', label: 'All Sports' },
+  { value: 'basketball_nba', label: 'NBA' },
+  { value: 'soccer_epl', label: 'EPL' },
+  { value: 'soccer_uefa_champions_league', label: 'UCL' },
+  { value: 'americanfootball_nfl', label: 'NFL' },
+]
+
 const markets = [
   { value: '', label: 'All Markets' },
+  // NBA
   { value: 'player_points', label: 'Points' },
   { value: 'player_rebounds', label: 'Rebounds' },
   { value: 'player_assists', label: 'Assists' },
   { value: 'player_threes', label: 'Threes' },
+  // Soccer
+  { value: 'player_goals', label: 'Goals' },
+  { value: 'player_shots_on_target', label: 'Shots on Target' },
+  { value: 'player_soccer_assists', label: 'Soccer Assists' },
+  // NFL
+  { value: 'player_pass_yds', label: 'Pass Yards' },
+  { value: 'player_rush_yds', label: 'Rush Yards' },
+  { value: 'player_reception_yds', label: 'Rec Yards' },
+  { value: 'player_pass_tds', label: 'Pass TDs' },
+  { value: 'player_anytime_td', label: 'Anytime TD' },
 ]
 
 const tiers = [
@@ -33,6 +52,15 @@ const selectClass =
 export function BetFilters({ filters, onChange }: BetFiltersProps) {
   return (
     <div className="flex flex-wrap gap-3">
+      <select
+        value={filters.sport || ''}
+        onChange={e => onChange({ ...filters, sport: e.target.value || undefined })}
+        className={selectClass}
+      >
+        {sports.map(s => (
+          <option key={s.value} value={s.value}>{s.label}</option>
+        ))}
+      </select>
       <select
         value={filters.market || ''}
         onChange={e => onChange({ ...filters, market: e.target.value || undefined })}

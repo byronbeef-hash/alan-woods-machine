@@ -25,6 +25,7 @@ MAX_BET_BY_TIER = {              # Tiered caps based on edge strength
     "MARGINAL": 0.03,            # Up to 3% for 3-5% edge
 }
 MIN_BET_SIZE = 10.0              # Minimum bet size in USD
+COMMISSION_RATE = 0.05           # Betfair commission (5% on net winnings)
 
 # =============================================================================
 # MODEL SETTINGS

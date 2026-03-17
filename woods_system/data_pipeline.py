@@ -293,15 +293,16 @@ class OddsEngine:
     def __init__(self, api_key: str = None):
         self.api_key = api_key or config.ODDS_API_KEY
 
-    def get_upcoming_games(self) -> list[dict]:
-        """Fetch upcoming NBA games with odds."""
+    def get_upcoming_games(self, sport_key: str = None) -> list[dict]:
+        """Fetch upcoming games with odds for a given sport."""
+        sport = sport_key or config.SPORT_KEY
         if self.api_key == "YOUR_API_KEY_HERE":
             print("NOTE: Set your Odds API key in config.py to fetch live odds.")
             print("      Get a free key at https://the-odds-api.com")
             return self._demo_games()
 
         try:
-            url = f"{self.BASE_URL}/sports/{config.SPORT_KEY}/odds/"
+            url = f"{self.BASE_URL}/sports/{sport}/odds/"
             params = {
                 "apiKey": self.api_key,
                 "regions": "us",
@@ -315,16 +316,17 @@ class OddsEngine:
             print(f"Error fetching game odds: {e}")
             return []
 
-    def get_player_props(self, event_id: str, market: str = "player_points") -> list[dict]:
+    def get_player_props(self, event_id: str, market: str = "player_points", sport_key: str = None) -> list[dict]:
         """
         Fetch player prop odds for a specific game.
         Returns lines like: Doncic Over 28.5 Points at -110
         """
+        sport = sport_key or config.SPORT_KEY
         if self.api_key == "YOUR_API_KEY_HERE":
             return self._demo_props(market)
 
         try:
-            url = f"{self.BASE_URL}/sports/{config.SPORT_KEY}/events/{event_id}/odds"
+            url = f"{self.BASE_URL}/sports/{sport}/events/{event_id}/odds"
             params = {
                 "apiKey": self.api_key,
                 "regions": "us",

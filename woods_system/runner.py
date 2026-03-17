@@ -32,6 +32,7 @@ from tracker import BetTracker
 from auto_bettor import AutoBettor, DryRunExchange, BetfairExchange
 from live_monitor import run_live_monitor
 from notifications import NotificationManager
+from sports.registry import get_active_adapters, get_adapter
 import config
 
 # ─── Configuration from environment ───────────────────────────────────────────
@@ -54,13 +55,17 @@ log = logging.getLogger("woods")
 
 # ─── Core Pipeline ────────────────────────────────────────────────────────────
 
-def run_scan_and_bet():
+def run_scan_and_bet(sport_key: str = None):
     """
     Full pipeline: scan → predict → find overlays → size bets → execute.
-    This runs before tip-off each night.
+    Runs for a specific sport, or NBA by default.
     """
+    sport_key = sport_key or config.SPORT_KEY
+    adapter = get_adapter(sport_key)
+    sport_name = adapter.display_name if adapter else sport_key
+
     log.info("=" * 60)
-    log.info("WOODS SYSTEM — SCAN & BET PIPELINE")
+    log.info(f"WOODS SYSTEM — SCAN & BET PIPELINE [{sport_name}]")
     log.info(f"Mode: {MODE.upper()} | Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     log.info("=" * 60)
 
@@ -70,34 +75,72 @@ def run_scan_and_bet():
         # 1. Fetch odds
         log.info("[1/5] Fetching upcoming games and odds...")
         odds_engine = OddsEngine()
-        games = odds_engine.get_upcoming_games()
+        games = odds_engine.get_upcoming_games(sport_key=sport_key)
         log.info(f"       Found {len(games)} games")
 
         # 2. Collect all props (deduplicated)
+        markets = adapter.prop_markets if adapter else config.PROP_MARKETS
         all_props = []
         seen = set()
-        for market in config.PROP_MARKETS:
+        for market in markets:
             log.info(f"[2/5] Fetching {market} props...")
             for game in games:
                 game_id = game.get("id", "demo")
-                props = odds_engine.get_player_props(game_id, market)
+                props = odds_engine.get_player_props(game_id, market, sport_key=sport_key)
                 for p in props:
                     key = (p["player"], p["market"], p["side"], p["line"])
                     if key not in seen:
                         seen.add(key)
-                        # Attach game context to each prop
                         p["home_team"] = game.get("home_team")
                         p["away_team"] = game.get("away_team")
                         p["game_time"] = game.get("commence_time")
+                        p["sport"] = sport_key
                         all_props.append(p)
 
         players = set(p["player"] for p in all_props if p["side"] == "Over")
         log.info(f"       {len(all_props)} prop lines across {len(players)} players")
 
-        # 3. Run model
+        # 3. Run model — use sport adapter if available, else default PropModel
         log.info("[3/5] Running model predictions...")
-        model = PropModel()
-        predictions = model.batch_predict(all_props)
+        if adapter and sport_key != "basketball_nba":
+            # Use sport-specific adapter for non-NBA
+            predictions = []
+            for prop in all_props:
+                if prop["side"] != "Over":
+                    continue
+                pred = adapter.predict_over_probability(
+                    player_name=prop["player"],
+                    market=prop["market"],
+                    line=prop["line"],
+                    is_home=True,
+                )
+                if pred:
+                    pred["market_implied_over"] = prop["implied_prob"]
+                    pred["over_odds_decimal"] = prop["odds_decimal"]
+                    pred["over_odds_american"] = prop["odds_american"]
+                    pred["home_team"] = prop.get("home_team")
+                    pred["away_team"] = prop.get("away_team")
+                    pred["game_time"] = prop.get("game_time")
+                    pred["sport"] = sport_key
+                    # Find under prop
+                    under_prop = next(
+                        (p for p in all_props
+                         if p["player"] == prop["player"]
+                         and p["market"] == prop["market"]
+                         and p["side"] == "Under"),
+                        None
+                    )
+                    if under_prop:
+                        pred["market_implied_under"] = under_prop["implied_prob"]
+                        pred["under_odds_decimal"] = under_prop["odds_decimal"]
+                        pred["under_odds_american"] = under_prop["odds_american"]
+                    predictions.append(pred)
+        else:
+            model = PropModel()
+            predictions = model.batch_predict(all_props)
+            for pred in predictions:
+                pred["sport"] = sport_key
+
         log.info(f"       Generated {len(predictions)} predictions")
 
         # 4. Find overlays
@@ -108,9 +151,12 @@ def run_scan_and_bet():
         log.info(report)
 
         if not overlays:
-            log.info("No overlays found. Patience is the edge.")
-            notifier.telegram.send("📭 <b>No overlays today.</b> Patience is the edge.")
+            log.info(f"No overlays found for {sport_name}. Patience is the edge.")
             return
+
+        # Tag overlays with sport
+        for o in overlays:
+            o["sport"] = sport_key
 
         # 5. Size bets and execute
         log.info("[5/5] Sizing bets and executing...")
@@ -130,21 +176,22 @@ def run_scan_and_bet():
         results = bettor.execute_bet_card(bets)
 
         # Look up jersey numbers and record bets
-        stats_engine = PlayerStatsEngine()
         for bet in bets:
-            player_id = stats_engine.get_player_id(bet["player"])
-            if player_id:
-                bet["jersey_number"] = stats_engine.get_player_jersey_number(player_id)
+            bet["sport"] = sport_key
+            if adapter:
+                jersey = adapter.get_player_jersey_number(bet["player"])
+                if jersey:
+                    bet["jersey_number"] = jersey
             tracker.record_bet(bet, sizer.bankroll)
 
-        log.info(f"\nPlaced {len(results)} bets ({MODE} mode)")
+        log.info(f"\nPlaced {len(results)} bets ({MODE} mode) [{sport_name}]")
 
         # Send notifications
         notifier.notify_bet_card(bets, sizer.bankroll)
 
     except Exception as e:
-        log.exception(f"Pipeline error: {e}")
-        notifier.notify_error(f"Scan pipeline failed: {e}")
+        log.exception(f"Pipeline error [{sport_name}]: {e}")
+        notifier.notify_error(f"Scan pipeline failed [{sport_name}]: {e}")
 
 
 def run_results_and_report():
@@ -252,13 +299,29 @@ def run_backtest_demo():
 # ─── Scheduler ────────────────────────────────────────────────────────────────
 
 def run_live_monitor_if_game_hours():
-    """Run live monitor only during NBA game hours (6 PM – 1 AM ET)."""
+    """Run live monitor during active game hours for any sport."""
     hour = datetime.now().hour
-    if 18 <= hour or hour < 1:
-        try:
-            run_live_monitor()
-        except Exception as e:
-            log.exception(f"Live monitor error: {e}")
+    try:
+        adapters = get_active_adapters()
+        for adapter in adapters:
+            start, end = adapter.get_game_hours()
+            # Handle overnight ranges (e.g., 18-25 means 18-23 + 0-1)
+            if end > 24:
+                in_window = hour >= start or hour < (end - 24)
+            else:
+                in_window = start <= hour < end
+            if in_window:
+                run_live_monitor()
+                return  # Only need to run once per cycle
+    except Exception as e:
+        log.exception(f"Live monitor error: {e}")
+
+
+def run_scan_for_sport(sport_key: str):
+    """Wrapper to pass sport_key to the scan pipeline."""
+    def _run():
+        run_scan_and_bet(sport_key=sport_key)
+    return _run
 
 
 def start_scheduler():
@@ -266,12 +329,16 @@ def start_scheduler():
     log.info("=" * 60)
     log.info("WOODS SYSTEM — SCHEDULER STARTED")
     log.info(f"Mode: {MODE.upper()}")
-    log.info(f"Scan time: {SCAN_TIME} ET")
-    log.info(f"Results time: {RESULTS_TIME} ET")
-    log.info(f"Live monitor: every 2 min during game hours (6 PM – 1 AM ET)")
     log.info("=" * 60)
 
-    schedule.every().day.at(SCAN_TIME).do(run_scan_and_bet)
+    # Schedule scans for each active sport at their optimal pre-game time
+    adapters = get_active_adapters()
+    for adapter in adapters:
+        scan_time = adapter.get_scan_time()
+        log.info(f"  {adapter.display_name}: scan at {scan_time} ET, "
+                 f"games {adapter.get_game_hours()[0]}:00–{adapter.get_game_hours()[1] % 24}:00 ET")
+        schedule.every().day.at(scan_time).do(run_scan_for_sport(adapter.sport_key))
+
     schedule.every().day.at(RESULTS_TIME).do(run_results_and_report)
     schedule.every(2).minutes.do(run_live_monitor_if_game_hours)
 

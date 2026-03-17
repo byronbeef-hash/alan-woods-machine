@@ -11,8 +11,11 @@ Tables:
 
 import os
 import json
+import time
 from datetime import datetime
 from typing import Optional
+
+import config
 
 try:
     from supabase import create_client, Client
@@ -66,6 +69,8 @@ class Database:
             "away_team": bet.get("away_team"),
             "game_time": bet.get("game_time"),
             "jersey_number": bet.get("jersey_number"),
+            "commission_rate": bet.get("commission_rate", config.COMMISSION_RATE),
+            "sport": bet.get("sport", config.SPORT_KEY),
             "result": "PENDING",
             "actual_stat": None,
             "pnl": None,
@@ -115,7 +120,8 @@ class Database:
             bankroll_at_bet = float(row["bankroll_at_bet"])
 
             won = (actual_stat > line) if side == "Over" else (actual_stat < line)
-            pnl = bet_size * (odds_decimal - 1) if won else -bet_size
+            commission = float(row.get("commission_rate") or config.COMMISSION_RATE)
+            pnl = bet_size * (odds_decimal - 1) * (1 - commission) if won else -bet_size
             running_bankroll = bankroll_at_bet + pnl
 
             # Update the record
@@ -226,7 +232,8 @@ class Database:
             bankroll_at_bet = float(row["bankroll_at_bet"])
 
             won = (actual_stat > line) if side == "Over" else (actual_stat < line)
-            pnl = bet_size * (odds_decimal - 1) if won else -bet_size
+            commission = float(row.get("commission_rate") or config.COMMISSION_RATE)
+            pnl = bet_size * (odds_decimal - 1) * (1 - commission) if won else -bet_size
             running_bankroll = bankroll_at_bet + pnl
 
             self.client.table("bets").update({
@@ -249,6 +256,64 @@ class Database:
         except Exception as e:
             print(f"  [Supabase] Error settling bet {bet_id}: {e}")
             return None
+
+    # -------------------------------------------------------------------------
+    # System Config (read/write from system_config table)
+    # -------------------------------------------------------------------------
+    _config_cache: dict = {}
+    _config_cache_time: float = 0
+    _CONFIG_CACHE_TTL = 300  # 5 minutes
+
+    def get_all_config(self) -> dict:
+        """Fetch all system config as {key: value} dict. Cached for 5 min."""
+        now = time.time()
+        if self._config_cache and (now - self._config_cache_time) < self._CONFIG_CACHE_TTL:
+            return self._config_cache
+
+        if not self.enabled:
+            return {}
+
+        try:
+            result = self.client.table("system_config").select("key, value").execute()
+            cfg = {}
+            for row in (result.data or []):
+                val = row["value"]
+                # JSONB values come back as Python types already
+                if isinstance(val, str):
+                    try:
+                        val = json.loads(val)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                cfg[row["key"]] = val
+            self._config_cache = cfg
+            self._config_cache_time = now
+            return cfg
+        except Exception as e:
+            print(f"  [Supabase] Error fetching config: {e}")
+            return self._config_cache or {}
+
+    def get_config(self, key: str, default=None):
+        """Get a single config value by key."""
+        cfg = self.get_all_config()
+        return cfg.get(key, default)
+
+    def set_config(self, key: str, value) -> bool:
+        """Upsert a config value."""
+        if not self.enabled:
+            return False
+        try:
+            self.client.table("system_config").upsert({
+                "key": key,
+                "value": json.dumps(value) if not isinstance(value, (int, float, bool, list)) else value,
+                "updated_at": datetime.now().isoformat(),
+            }).execute()
+            # Invalidate cache
+            self._config_cache = {}
+            self._config_cache_time = 0
+            return True
+        except Exception as e:
+            print(f"  [Supabase] Error setting config {key}: {e}")
+            return False
 
     def get_current_bankroll(self) -> Optional[float]:
         """Get the most recent bankroll value."""

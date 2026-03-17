@@ -29,6 +29,8 @@ export interface Bet {
   live_stat: number | null
   live_model_prob: number | null
   settled_at: string | null
+  commission_rate: number | null
+  sport: string | null
   notes: string | null
 }
 
@@ -59,11 +61,31 @@ export interface MarketStats {
 export type TierType = 'STRONG' | 'MODERATE' | 'MARGINAL'
 
 export const MARKET_LABELS: Record<string, string> = {
+  // NBA
   player_points: 'Points',
   player_rebounds: 'Rebounds',
   player_assists: 'Assists',
   player_threes: 'Threes',
+  // Soccer
+  player_goals: 'Goals',
+  player_shots_on_target: 'Shots on Target',
+  player_soccer_assists: 'Assists',
+  // NFL
+  player_pass_yds: 'Pass Yards',
+  player_rush_yds: 'Rush Yards',
+  player_reception_yds: 'Rec Yards',
+  player_pass_tds: 'Pass TDs',
+  player_anytime_td: 'Anytime TD',
 }
+
+export const SPORT_LABELS: Record<string, string> = {
+  basketball_nba: 'NBA',
+  soccer_epl: 'EPL',
+  soccer_uefa_champions_league: 'UCL',
+  americanfootball_nfl: 'NFL',
+}
+
+export const DEFAULT_COMMISSION_RATE = 0.05
 
 export const TIER_COLORS: Record<string, string> = {
   STRONG: '#22c55e',

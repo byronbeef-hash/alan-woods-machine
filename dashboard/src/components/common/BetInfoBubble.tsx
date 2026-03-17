@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import type { Bet } from '../../lib/types'
+import { DEFAULT_COMMISSION_RATE } from '../../lib/types'
 import { formatPercent, formatEdge, formatOdds, formatGameTime, formatCurrency, formatBankroll, getMarketLabel } from '../../lib/utils'
 import { TierBadge, ResultBadge } from './Badge'
 import { LiveBadge } from './LiveBadge'
@@ -39,17 +40,20 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open, updatePosition])
 
-  const kellyFraction = bet.model_prob !== null && bet.odds_decimal !== null
-    ? ((bet.model_prob * bet.odds_decimal - 1) / (bet.odds_decimal - 1))
+  const commission = bet.commission_rate ?? DEFAULT_COMMISSION_RATE
+  const effectiveB = bet.odds_decimal !== null ? (bet.odds_decimal - 1) * (1 - commission) : null
+
+  const kellyFraction = bet.model_prob !== null && effectiveB !== null && effectiveB > 0
+    ? ((effectiveB * bet.model_prob - (1 - bet.model_prob)) / effectiveB)
     : null
   const quarterKelly = kellyFraction !== null ? kellyFraction * 0.25 : null
 
-  const estimatedWin = bet.bet_size !== null && bet.odds_decimal !== null
-    ? bet.bet_size * (bet.odds_decimal - 1)
+  const estimatedWin = bet.bet_size !== null && effectiveB !== null
+    ? bet.bet_size * effectiveB
     : null
 
-  const expectedValue = bet.model_prob !== null && bet.bet_size !== null && bet.odds_decimal !== null
-    ? (bet.model_prob * bet.bet_size * (bet.odds_decimal - 1)) - ((1 - bet.model_prob) * bet.bet_size)
+  const expectedValue = bet.model_prob !== null && bet.bet_size !== null && effectiveB !== null
+    ? (bet.model_prob * bet.bet_size * effectiveB) - ((1 - bet.model_prob) * bet.bet_size)
     : null
 
   const isLive = bet.game_status?.startsWith('LIVE_')
@@ -128,6 +132,7 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
             <Row label="Market" value={getMarketLabel(bet.market)} />
             <Row label="Play" value={`${bet.side} ${bet.line}`} />
             <Row label="Odds" value={`${formatOdds(bet.odds_american)} (${bet.odds_decimal?.toFixed(2) ?? '—'})`} />
+            <Row label="Commission" value={formatPercent(commission)} color="text-gray-400" />
 
             <div className="border-t border-gray-700/50 pt-2" />
 
