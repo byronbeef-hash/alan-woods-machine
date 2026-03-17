@@ -291,6 +291,7 @@ class PropModel:
                 pred["home_team"] = prop.get("home_team")
                 pred["away_team"] = prop.get("away_team")
                 pred["game_time"] = prop.get("game_time")
+                pred["game_id"] = prop.get("game_id", "")
                 predictions.append(pred)
 
         return predictions

@@ -6,11 +6,28 @@ This config controls all system parameters: data sources, model settings,
 Kelly fraction, and bankroll management.
 """
 
+import os
+
+# Load .env file if python-dotenv is available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # =============================================================================
-# API KEYS
+# API KEYS (read from environment variables, fallback to defaults)
 # =============================================================================
 # Get a free key at https://the-odds-api.com (500 requests/month free)
-ODDS_API_KEY = "YOUR_API_KEY_HERE"
+ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "YOUR_API_KEY_HERE")
+
+# Betfair Exchange API
+BETFAIR_APP_KEY = os.environ.get("BETFAIR_APP_KEY", "")
+BETFAIR_USERNAME = os.environ.get("BETFAIR_USERNAME", "")
+BETFAIR_PASSWORD = os.environ.get("BETFAIR_PASSWORD", "")
+
+# Woods mode: "demo" for paper trading, "live" for real Betfair
+WOODS_MODE = os.environ.get("WOODS_MODE", "demo")
 
 # =============================================================================
 # BANKROLL SETTINGS
@@ -39,6 +56,7 @@ MIN_GAMES_PLAYED = 10            # Minimum games before we model a player
 # DATA SETTINGS
 # =============================================================================
 NBA_SEASON = "2025-26"           # Current NBA season
+MAX_AUTO_BETS = 4                # Maximum bets to auto-place per scan
 SPORT_KEY = "basketball_nba"     # The Odds API sport key
 PROP_MARKETS = [                 # Player prop markets to scan
     "player_points",

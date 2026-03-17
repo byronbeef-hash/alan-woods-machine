@@ -80,6 +80,8 @@ export interface ScanResult {
   home_team: string | null
   away_team: string | null
   game_time: string | null
+  game_id: string | null
+  game_description: string | null
   status: 'ACTIVE' | 'PLACED' | 'EXPIRED'
   placed_bet_id: number | null
 }

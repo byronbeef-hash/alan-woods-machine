@@ -151,8 +151,41 @@ export function ScannerTable({ results, onPlaceBet, placingId }: ScannerTablePro
               <td className="px-4 py-2.5 font-mono text-xs text-gray-300">
                 {result.suggested_bet_size !== null ? `$${result.suggested_bet_size.toFixed(0)}` : '—'}
               </td>
-              <td className="px-4 py-2.5 text-xs text-gray-400">
-                {result.game_time ? formatGameTime(result.game_time) : '—'}
+              <td className="px-4 py-2.5 text-xs">
+                {result.game_description || (result.home_team && result.away_team) ? (
+                  <div>
+                    <div className="text-gray-300">
+                      {result.game_description || `${result.away_team} @ ${result.home_team}`}
+                    </div>
+                    <div className="text-gray-500">
+                      {result.game_time
+                        ? new Date(result.game_time).toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                          }) +
+                          ', ' +
+                          new Date(result.game_time).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })
+                        : ''}
+                    </div>
+                  </div>
+                ) : result.game_time ? (
+                  <span className="text-gray-400">
+                    {new Date(result.game_time).toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    }) +
+                      ', ' +
+                      new Date(result.game_time).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                  </span>
+                ) : '—'}
               </td>
               <td className="px-4 py-2.5">
                 {result.status === 'ACTIVE' && onPlaceBet ? (

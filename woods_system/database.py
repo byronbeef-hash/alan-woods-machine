@@ -320,12 +320,37 @@ class Database:
     # -------------------------------------------------------------------------
 
     def insert_scan_results(self, results: list[dict], scan_id: str) -> int:
-        """Batch insert scan results. Returns count inserted."""
+        """Batch insert scan results. Clears old ACTIVE results first to prevent duplicates."""
         if not self.enabled or not results:
             return 0
 
+        # Clear old ACTIVE results before inserting fresh scan
+        try:
+            self.client.table("scan_results").delete().eq("status", "ACTIVE").execute()
+        except Exception as e:
+            print(f"  [Supabase] Warning: could not clear old scan results: {e}")
+
         records = []
+        seen_keys = set()
         for r in results:
+            # Deduplicate within this batch by game+player+market+side+line
+            dedup_key = (
+                r.get("game_id", ""),
+                r.get("player"),
+                r.get("market"),
+                r.get("side"),
+                r.get("line"),
+            )
+            if dedup_key in seen_keys:
+                continue
+            seen_keys.add(dedup_key)
+
+            # Build display-friendly game description
+            home = r.get("home_team", "")
+            away = r.get("away_team", "")
+            game_time = r.get("game_time", "")
+            game_desc = f"{away} @ {home}" if home and away else ""
+
             records.append({
                 "scan_id": scan_id,
                 "sport": r.get("sport", ""),
@@ -343,9 +368,11 @@ class Database:
                 "confidence": r.get("confidence"),
                 "kelly_pct": r.get("kelly_pct"),
                 "suggested_bet_size": r.get("bet_size"),
-                "home_team": r.get("home_team"),
-                "away_team": r.get("away_team"),
-                "game_time": r.get("game_time"),
+                "home_team": home,
+                "away_team": away,
+                "game_time": game_time,
+                "game_id": r.get("game_id", ""),
+                "game_description": game_desc,
                 "status": "ACTIVE",
             })
 

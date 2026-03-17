@@ -124,6 +124,7 @@ class OverlayFinder:
             "home_team": pred.get("home_team"),
             "away_team": pred.get("away_team"),
             "game_time": pred.get("game_time"),
+            "game_id": pred.get("game_id", ""),
         }
 
     def format_overlay_report(self, overlays: list[dict]) -> str:

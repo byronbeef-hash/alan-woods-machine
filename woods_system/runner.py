@@ -79,7 +79,7 @@ def run_scan_and_bet(sport_key: str = None):
         games = odds_engine.get_upcoming_games(sport_key=sport_key)
         log.info(f"       Found {len(games)} games")
 
-        # 2. Collect all props (deduplicated)
+        # 2. Collect all props (deduplicated per game)
         markets = adapter.prop_markets if adapter else config.PROP_MARKETS
         all_props = []
         seen = set()
@@ -87,14 +87,19 @@ def run_scan_and_bet(sport_key: str = None):
             log.info(f"[2/5] Fetching {market} props...")
             for game in games:
                 game_id = game.get("id", "demo")
+                home = game.get("home_team", "")
+                away = game.get("away_team", "")
+                game_time = game.get("commence_time", "")
                 props = odds_engine.get_player_props(game_id, market, sport_key=sport_key)
                 for p in props:
-                    key = (p["player"], p["market"], p["side"], p["line"])
+                    # Deduplicate per player+market+side+line+game
+                    key = (p["player"], p["market"], p["side"], p["line"], game_id)
                     if key not in seen:
                         seen.add(key)
-                        p["home_team"] = game.get("home_team")
-                        p["away_team"] = game.get("away_team")
-                        p["game_time"] = game.get("commence_time")
+                        p["home_team"] = home
+                        p["away_team"] = away
+                        p["game_time"] = game_time
+                        p["game_id"] = game_id
                         p["sport"] = sport_key
                         all_props.append(p)
 
@@ -122,6 +127,7 @@ def run_scan_and_bet(sport_key: str = None):
                     pred["home_team"] = prop.get("home_team")
                     pred["away_team"] = prop.get("away_team")
                     pred["game_time"] = prop.get("game_time")
+                    pred["game_id"] = prop.get("game_id", "")
                     pred["sport"] = sport_key
                     # Find under prop
                     under_prop = next(
@@ -167,14 +173,17 @@ def run_scan_and_bet(sport_key: str = None):
         bet_card = sizer.format_bet_card(bets)
         log.info(bet_card)
 
-        # Write ALL overlays to scan_results (both placed and unplaced)
+        # Write top overlays to scan_results (capped at 50 best)
         scan_id = str(uuid.uuid4())[:8]
         from database import Database
         db = Database()
 
+        # Sort overlays by edge descending, cap at top 50
+        overlays_sorted = sorted(overlays, key=lambda o: o.get("edge", 0), reverse=True)[:50]
+
         # Build scan result records from overlays + sizing info
         scan_records = []
-        for overlay in overlays:
+        for overlay in overlays_sorted:
             # Find matching sized bet if it exists
             sized = next(
                 (b for b in bets if b["player"] == overlay["player"]
@@ -201,6 +210,7 @@ def run_scan_and_bet(sport_key: str = None):
                 "home_team": overlay.get("home_team"),
                 "away_team": overlay.get("away_team"),
                 "game_time": overlay.get("game_time"),
+                "game_id": overlay.get("game_id", ""),
             })
 
         inserted = db.insert_scan_results(scan_records, scan_id)

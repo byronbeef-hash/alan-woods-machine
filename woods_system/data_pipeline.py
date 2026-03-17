@@ -10,7 +10,7 @@ import time
 import requests
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 try:
     from nba_api.stats.endpoints import (
@@ -293,8 +293,12 @@ class OddsEngine:
     def __init__(self, api_key: str = None):
         self.api_key = api_key or config.ODDS_API_KEY
 
-    def get_upcoming_games(self, sport_key: str = None) -> list[dict]:
-        """Fetch upcoming games with odds for a given sport."""
+    def get_upcoming_games(self, sport_key: str = None, hours_ahead: int = 48) -> list[dict]:
+        """Fetch upcoming games with odds for a given sport.
+
+        Only returns games starting within the next `hours_ahead` hours
+        to prevent betting on past or far-future games.
+        """
         sport = sport_key or config.SPORT_KEY
         if self.api_key == "YOUR_API_KEY_HERE":
             print("NOTE: Set your Odds API key in config.py to fetch live odds.")
@@ -311,7 +315,29 @@ class OddsEngine:
             }
             resp = requests.get(url, params=params, timeout=15)
             resp.raise_for_status()
-            return resp.json()
+            all_games = resp.json()
+
+            # Filter to games starting within the next N hours (not past, not too far future)
+            now = datetime.now(timezone.utc)
+            cutoff = now + timedelta(hours=hours_ahead)
+            filtered = []
+            for game in all_games:
+                commence = game.get("commence_time", "")
+                if not commence:
+                    continue
+                try:
+                    ct = datetime.fromisoformat(commence.replace("Z", "+00:00"))
+                    if ct > now and ct <= cutoff:
+                        filtered.append(game)
+                    elif ct <= now:
+                        print(f"  Skipping past game: {game.get('away_team')} @ {game.get('home_team')} ({commence})")
+                    else:
+                        print(f"  Skipping far-future game: {game.get('away_team')} @ {game.get('home_team')} ({commence})")
+                except (ValueError, TypeError) as e:
+                    print(f"  Warning: could not parse commence_time '{commence}': {e}")
+
+            print(f"  Filtered {len(all_games)} API games -> {len(filtered)} within next {hours_ahead}h")
+            return filtered
         except Exception as e:
             print(f"Error fetching game odds: {e}")
             return []
