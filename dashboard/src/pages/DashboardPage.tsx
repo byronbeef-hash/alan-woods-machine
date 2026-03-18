@@ -5,6 +5,7 @@ import { KPICards } from '../components/dashboard/KPICards'
 import { BankrollChart } from '../components/dashboard/BankrollChart'
 import { RecentBets } from '../components/dashboard/RecentBets'
 import { TierBreakdown } from '../components/dashboard/TierBreakdown'
+import { ActivityLog } from '../components/dashboard/ActivityLog'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 
 export function DashboardPage() {
@@ -40,6 +41,7 @@ export function DashboardPage() {
         <BankrollChart bets={allBets} />
         <TierBreakdown bets={allBets} />
       </div>
+      <ActivityLog />
       <RecentBets bets={allBets} />
     </div>
   )
