@@ -1,346 +1,312 @@
 """
-Woods System — Game-Level Overlay Scanner
-Named after Alan Woods, the legendary quantitative gambler.
+Woods System — Game-Level Overlay Scanner (Betfair Exchange)
 
-Scans across all sports for game-level overlays (h2h, spreads, totals)
-by comparing odds across every available bookmaker. Finds the best price,
-calculates edge vs. market average, and flags overlays worth betting.
+Scans all markets on Betfair Exchange for upcoming games across
+multiple sports. Finds value by comparing back/lay spreads,
+liquidity depth, and market efficiency.
 
-Alan's core insight: the crowd sets a price, but there's always a bookmaker
-offering better value. Find the outlier, verify the edge, and bet.
+Uses Betfair API directly — no third-party odds API needed.
 """
 
-import statistics
 from datetime import datetime, timezone, timedelta
 
-import requests
-
-import config
+from betfair_client import BetfairClient
 
 # ---------------------------------------------------------------------------
-# Supported sports with friendly labels
+# Supported sports: Betfair event type IDs + competition IDs
 # ---------------------------------------------------------------------------
 SUPPORTED_SPORTS = {
-    "aussierules_afl": "AFL",
-    "basketball_nba": "NBA",
-    "soccer_epl": "EPL",
-    "soccer_uefa_champions_league": "UCL",
-    "americanfootball_nfl": "NFL",
+    "basketball_nba": {
+        "label": "NBA",
+        "event_type": "7522",
+        "competition": "10547864",
+    },
+    "aussierules_afl": {
+        "label": "AFL",
+        "event_type": "61420",
+        "competition": "11897406",
+    },
+    "soccer_epl": {
+        "label": "EPL",
+        "event_type": "1",
+        "competition": "10932509",
+    },
+    "americanfootball_nfl": {
+        "label": "NFL",
+        "event_type": "6423",
+        "competition": "12282733",
+    },
 }
 
-# Markets to scan for each game
-MARKETS = ["h2h", "spreads", "totals"]
-
-# Minimum edge percentage to flag as an overlay
-MIN_EDGE_PCT = 3.0
-
-# Betfair bookmaker keys (The Odds API naming)
-BETFAIR_KEYS = {"betfair_ex_au", "betfair_ex_eu", "betfair_ex_uk", "betfair"}
-
-BASE_URL = "https://api.the-odds-api.com/v4"
+# Minimum spread % to flag a market as interesting
+MIN_SPREAD_PCT = 1.0
 
 
 class GameOverlayScanner:
     """
-    Scans game-level markets across bookmakers to find overlays.
+    Scans Betfair Exchange markets across sports to find overlays.
 
-    For each game/market/selection, compares odds from all bookmakers
-    to find where the best price diverges significantly from the
-    market average — that divergence is the overlay.
+    For each game/market/selection, examines back/lay prices,
+    available liquidity, and spread tightness to identify
+    efficient markets worth betting into.
     """
 
-    def __init__(self, api_key: str = None, hours_ahead: int = 72):
-        self.api_key = api_key or config.ODDS_API_KEY
+    def __init__(self, hours_ahead: int = 48):
         self.hours_ahead = hours_ahead
-        self._remaining_requests = None
+        self.bf = BetfairClient()
+        self._logged_in = False
+
+    def _ensure_login(self):
+        if not self._logged_in:
+            self._logged_in = self.bf.login()
+        return self._logged_in
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def scan_all_sports(self) -> list[dict]:
-        """Scan every supported sport and return all overlays found."""
-        all_overlays = []
-        for sport_key in SUPPORTED_SPORTS:
-            overlays = self.scan_sport(sport_key)
-            all_overlays.extend(overlays)
-        all_overlays.sort(key=lambda o: o["edge_pct"], reverse=True)
-        return all_overlays
+        """Scan every supported sport and return all market entries."""
+        if not self._ensure_login():
+            print("ERROR: Failed to login to Betfair")
+            return []
+
+        all_entries = []
+        for sport_key, sport_cfg in SUPPORTED_SPORTS.items():
+            entries = self.scan_sport(sport_key)
+            all_entries.extend(entries)
+        return all_entries
 
     def scan_sport(self, sport_key: str) -> list[dict]:
-        """Fetch all upcoming games for a sport and find overlays."""
-        label = SUPPORTED_SPORTS.get(sport_key, sport_key)
+        """Fetch all upcoming games for a sport and return market data."""
+        if not self._ensure_login():
+            return []
+
+        sport_cfg = SUPPORTED_SPORTS.get(sport_key)
+        if not sport_cfg:
+            print(f"  Unknown sport: {sport_key}")
+            return []
+
+        label = sport_cfg["label"]
         print(f"\n{'='*60}")
-        print(f"Scanning {label} ({sport_key})")
+        print(f"Scanning {label} on Betfair Exchange")
         print(f"{'='*60}")
 
-        games = self._fetch_games(sport_key)
-        if not games:
-            print(f"  No upcoming games found for {label}")
-            return []
+        now = datetime.now(timezone.utc)
+        cutoff = now + timedelta(hours=self.hours_ahead)
 
-        print(f"  Found {len(games)} upcoming games")
-        overlays = []
-
-        for game in games:
-            game_overlays = self._analyse_game(sport_key, game)
-            overlays.extend(game_overlays)
-
-        overlays.sort(key=lambda o: o["edge_pct"], reverse=True)
-        print(f"  => {len(overlays)} overlays found for {label}")
-        return overlays
-
-    def scan_game(self, sport_key: str, event_id: str) -> list[dict]:
-        """Detailed overlay analysis for a single game by event ID."""
-        label = SUPPORTED_SPORTS.get(sport_key, sport_key)
-        print(f"\nScanning game {event_id} ({label})")
-
-        game = self._fetch_single_game(sport_key, event_id)
-        if not game:
-            print(f"  Game {event_id} not found")
-            return []
-
-        overlays = self._analyse_game(sport_key, game)
-        overlays.sort(key=lambda o: o["edge_pct"], reverse=True)
-        return overlays
-
-    # ------------------------------------------------------------------
-    # API requests
-    # ------------------------------------------------------------------
-
-    def _fetch_games(self, sport_key: str) -> list[dict]:
-        """Fetch upcoming games with odds across all bookmakers."""
-        if self.api_key == "YOUR_API_KEY_HERE":
-            print("ERROR: No Odds API key configured. Set ODDS_API_KEY in .env")
-            return []
-
+        # Get events from Betfair
         try:
-            url = f"{BASE_URL}/sports/{sport_key}/odds/"
-            params = {
-                "apiKey": self.api_key,
-                "regions": "au,us,eu",
-                "markets": ",".join(MARKETS),
-                "oddsFormat": "decimal",
+            filt = {
+                "eventTypeIds": [sport_cfg["event_type"]],
+                "marketStartTime": {
+                    "from": now.isoformat(),
+                    "to": cutoff.isoformat(),
+                },
             }
-            resp = requests.get(url, params=params, timeout=20)
-            resp.raise_for_status()
+            if sport_cfg.get("competition"):
+                filt["competitionIds"] = [sport_cfg["competition"]]
 
-            # Track API usage
-            self._remaining_requests = resp.headers.get(
-                "x-requests-remaining", self._remaining_requests
-            )
+            events = self.bf._betting_call("listEvents", {
+                "filter": filt,
+                "maxResults": "50",
+            })
+        except Exception as e:
+            print(f"  Error fetching {label} events: {e}")
+            return []
 
-            all_games = resp.json()
+        if not events:
+            print(f"  No upcoming {label} games found")
+            return []
 
-            # Filter to games within the lookahead window
-            now = datetime.now(timezone.utc)
-            cutoff = now + timedelta(hours=self.hours_ahead)
-            filtered = []
-            for game in all_games:
-                commence = game.get("commence_time", "")
-                if not commence:
-                    continue
+        print(f"  Found {len(events)} upcoming games")
+        all_entries = []
+
+        for e in events:
+            ev = e["event"]
+            event_name = ev["name"]
+            event_id = ev["id"]
+            game_time = ev.get("openDate", "")
+
+            # Parse team names
+            home, away = self._parse_teams(event_name)
+
+            # Get all markets for this event
+            try:
+                markets = self.bf._betting_call("listMarketCatalogue", {
+                    "filter": {"eventIds": [event_id]},
+                    "maxResults": "30",
+                    "marketProjection": ["RUNNER_DESCRIPTION", "MARKET_START_TIME"],
+                })
+            except Exception as ex:
+                print(f"  Error fetching markets for {event_name}: {ex}")
+                continue
+
+            print(f"  {event_name}: {len(markets)} markets")
+
+            for m in markets:
+                market_id = m["marketId"]
+                market_name = m["marketName"]
+
                 try:
-                    ct = datetime.fromisoformat(commence.replace("Z", "+00:00"))
-                    if now < ct <= cutoff:
-                        filtered.append(game)
-                except (ValueError, TypeError):
-                    pass
-
-            if self._remaining_requests is not None:
-                print(f"  API requests remaining: {self._remaining_requests}")
-
-            return filtered
-
-        except requests.exceptions.HTTPError as e:
-            print(f"  HTTP error fetching {sport_key}: {e}")
-            return []
-        except Exception as e:
-            print(f"  Error fetching {sport_key}: {e}")
-            return []
-
-    def _fetch_single_game(self, sport_key: str, event_id: str) -> dict | None:
-        """Fetch odds for a single game by event ID."""
-        if self.api_key == "YOUR_API_KEY_HERE":
-            print("ERROR: No Odds API key configured. Set ODDS_API_KEY in .env")
-            return None
-
-        try:
-            url = f"{BASE_URL}/sports/{sport_key}/events/{event_id}/odds"
-            params = {
-                "apiKey": self.api_key,
-                "regions": "au,us,eu",
-                "markets": ",".join(MARKETS),
-                "oddsFormat": "decimal",
-            }
-            resp = requests.get(url, params=params, timeout=20)
-            resp.raise_for_status()
-            self._remaining_requests = resp.headers.get(
-                "x-requests-remaining", self._remaining_requests
-            )
-            return resp.json()
-
-        except Exception as e:
-            print(f"  Error fetching game {event_id}: {e}")
-            return None
-
-    # ------------------------------------------------------------------
-    # Analysis
-    # ------------------------------------------------------------------
-
-    def _analyse_game(self, sport_key: str, game: dict) -> list[dict]:
-        """Analyse a single game across all markets and return overlays."""
-        label = SUPPORTED_SPORTS.get(sport_key, sport_key)
-        home = game.get("home_team", "Unknown")
-        away = game.get("away_team", "Unknown")
-        event_id = game.get("id", "")
-        commence = game.get("commence_time", "")
-
-        bookmakers = game.get("bookmakers", [])
-        if not bookmakers:
-            return []
-
-        overlays = []
-
-        for market_key in MARKETS:
-            market_overlays = self._analyse_market(
-                sport_key=sport_key,
-                label=label,
-                event_id=event_id,
-                home=home,
-                away=away,
-                commence=commence,
-                market_key=market_key,
-                bookmakers=bookmakers,
-            )
-            overlays.extend(market_overlays)
-
-        return overlays
-
-    def _analyse_market(
-        self,
-        sport_key: str,
-        label: str,
-        event_id: str,
-        home: str,
-        away: str,
-        commence: str,
-        market_key: str,
-        bookmakers: list[dict],
-    ) -> list[dict]:
-        """Analyse a single market (h2h/spreads/totals) across all bookmakers."""
-
-        # Collect all outcomes by selection key
-        # selection_key = (name, point) to group equivalent outcomes
-        selection_data: dict[tuple, list[dict]] = {}
-
-        for bk in bookmakers:
-            bk_key = bk.get("key", "")
-            bk_title = bk.get("title", bk_key)
-
-            for market in bk.get("markets", []):
-                if market.get("key") != market_key:
+                    book = self.bf.get_market_prices(market_id)
+                except Exception:
                     continue
 
-                for outcome in market.get("outcomes", []):
-                    name = outcome.get("name", "")
-                    price = outcome.get("price")
-                    point = outcome.get("point")  # spread or total line
+                for br in book.get("runners", []):
+                    runner_name = next(
+                        (r["runnerName"] for r in m.get("runners", [])
+                         if r["selectionId"] == br["selectionId"]),
+                        "Unknown"
+                    )
+                    selection_id = br["selectionId"]
 
-                    if price is None or price <= 1.0:
+                    backs = br.get("ex", {}).get("availableToBack", [])
+                    lays = br.get("ex", {}).get("availableToLay", [])
+
+                    if not backs:
                         continue
 
-                    sel_key = (name, point)
-                    if sel_key not in selection_data:
-                        selection_data[sel_key] = []
+                    back_price = backs[0]["price"]
+                    back_size = backs[0]["size"]
+                    lay_price = lays[0]["price"] if lays else None
+                    lay_size = lays[0]["size"] if lays else 0
 
-                    selection_data[sel_key].append({
-                        "bookmaker": bk_key,
-                        "title": bk_title,
-                        "price": float(price),
+                    # Skip junk: odds too low, or tiny liquidity
+                    if back_price < 1.05 or back_size < 20:
+                        continue
+
+                    # Implied probability = 1 / decimal_odds
+                    implied_prob = round((1.0 / back_price) * 100, 1)
+
+                    # Edge = back/lay spread as percentage
+                    spread_pct = 0.0
+                    if lay_price and lay_price > back_price:
+                        spread_pct = round(((lay_price - back_price) / back_price) * 100, 1)
+
+                    # Win Expectation (Alan Woods): true_prob * odds
+                    # Use lay price as proxy for true probability
+                    win_expectation = 0.0
+                    if lay_price and lay_price > 1.0:
+                        true_prob = 1.0 / lay_price
+                        win_expectation = round(true_prob * back_price, 3)
+
+                    # Determine tier based on liquidity and spread
+                    if back_size > 500 and spread_pct < 3:
+                        tier = "STRONG"
+                    elif back_size > 100 and spread_pct < 5:
+                        tier = "MODERATE"
+                    elif back_size > 50:
+                        tier = "MARGINAL"
+                    else:
+                        continue  # Skip thin/illiquid markets
+
+                    all_entries.append({
+                        "sport": sport_key,
+                        "sport_label": label,
+                        "event_id": event_id,
+                        "home_team": home,
+                        "away_team": away,
+                        "commence_time": game_time,
+                        "market": market_name,
+                        "selection": runner_name,
+                        "selection_id": selection_id,
+                        "market_id": market_id,
+                        "line": None,
+                        "best_odds": back_price,
+                        "best_book": "Betfair Exchange",
+                        "avg_odds": back_price,
+                        "worst_odds": back_price,
+                        "edge_pct": spread_pct,
+                        "implied_prob": implied_prob,
+                        "num_bookmakers": 1,
+                        "betfair_back": back_price,
+                        "betfair_lay": lay_price,
+                        "back_size": back_size,
+                        "lay_size": lay_size,
+                        "tier": tier,
                     })
 
-        # Evaluate each selection for overlays
-        overlays = []
-        for (sel_name, sel_point), entries in selection_data.items():
-            if len(entries) < 3:
-                # Need at least 3 bookmakers for meaningful comparison
+        print(f"  => {len(all_entries)} selections across {len(events)} games")
+        return all_entries
+
+    def scan_game(self, event_id: str) -> list[dict]:
+        """Detailed scan for a single game by Betfair event ID."""
+        if not self._ensure_login():
+            return []
+
+        try:
+            markets = self.bf._betting_call("listMarketCatalogue", {
+                "filter": {"eventIds": [event_id]},
+                "maxResults": "50",
+                "marketProjection": ["RUNNER_DESCRIPTION", "MARKET_START_TIME"],
+            })
+        except Exception as e:
+            print(f"  Error: {e}")
+            return []
+
+        entries = []
+        for m in markets:
+            try:
+                book = self.bf.get_market_prices(m["marketId"])
+            except Exception:
                 continue
 
-            prices = [e["price"] for e in entries]
-            best_entry = max(entries, key=lambda e: e["price"])
-            worst_price = min(prices)
-            avg_price = statistics.mean(prices)
+            for br in book.get("runners", []):
+                runner_name = next(
+                    (r["runnerName"] for r in m.get("runners", [])
+                     if r["selectionId"] == br["selectionId"]),
+                    "Unknown"
+                )
+                backs = br.get("ex", {}).get("availableToBack", [])
+                lays = br.get("ex", {}).get("availableToLay", [])
 
-            if avg_price <= 1.0:
-                continue
+                if not backs:
+                    continue
 
-            edge_pct = (best_entry["price"] / avg_price - 1) * 100
-            implied_prob = 1.0 / avg_price
+                back_price = backs[0]["price"]
+                back_size = backs[0]["size"]
+                lay_price = lays[0]["price"] if lays else None
 
-            if edge_pct < MIN_EDGE_PCT:
-                continue
+                spread_pct = 0.0
+                if lay_price and lay_price > 1.0:
+                    spread_pct = round(((lay_price / back_price) - 1) * 100, 2)
 
-            # Determine tier
-            if edge_pct >= 8.0:
-                tier = "STRONG"
-            elif edge_pct >= 5.0:
-                tier = "MODERATE"
-            else:
-                tier = "MARGINAL"
+                entries.append({
+                    "market": m["marketName"],
+                    "market_id": m["marketId"],
+                    "selection": runner_name,
+                    "selection_id": br["selectionId"],
+                    "betfair_back": back_price,
+                    "betfair_lay": lay_price,
+                    "back_size": back_size,
+                    "spread_pct": spread_pct,
+                    "implied_prob": round(100 / back_price, 1),
+                })
 
-            # Find Betfair odds
-            betfair_back = None
-            betfair_lay = None
-            for e in entries:
-                if e["bookmaker"] in BETFAIR_KEYS:
-                    betfair_back = e["price"]
-                    # Lay price approximation: slightly above back
-                    # The Odds API only provides back prices for exchange;
-                    # estimate lay as back + 1 tick (~0.02 for odds < 5)
-                    betfair_lay = round(e["price"] + 0.02, 2)
-                    break
-
-            overlay = {
-                "sport": sport_key,
-                "sport_label": label,
-                "event_id": event_id,
-                "home_team": home,
-                "away_team": away,
-                "commence_time": commence,
-                "market": market_key,
-                "selection": sel_name,
-                "line": sel_point,
-                "best_odds": round(best_entry["price"], 3),
-                "best_book": best_entry["bookmaker"],
-                "avg_odds": round(avg_price, 3),
-                "worst_odds": round(worst_price, 3),
-                "edge_pct": round(edge_pct, 1),
-                "implied_prob": round(implied_prob, 4),
-                "num_bookmakers": len(entries),
-                "betfair_back": betfair_back,
-                "betfair_lay": betfair_lay,
-                "tier": tier,
-            }
-            overlays.append(overlay)
-
-            print(
-                f"    [{tier:8s}] {sel_name}"
-                f" ({market_key}{f' {sel_point}' if sel_point else ''})"
-                f"  best={best_entry['price']:.2f} @ {best_entry['bookmaker']}"
-                f"  avg={avg_price:.2f}  edge={edge_pct:.1f}%"
-            )
-
-        return overlays
+        return entries
 
     # ------------------------------------------------------------------
-    # Utility
+    # Helpers
     # ------------------------------------------------------------------
 
-    @property
-    def api_requests_remaining(self) -> str | None:
-        """Return remaining API quota if known."""
-        return self._remaining_requests
+    @staticmethod
+    def _parse_teams(event_name: str) -> tuple[str, str]:
+        """Parse Betfair event name into (home, away) teams."""
+        for sep in [" @ ", " v ", " vs "]:
+            if sep in event_name:
+                parts = event_name.split(sep, 1)
+                if sep == " @ ":
+                    return parts[1].strip(), parts[0].strip()
+                else:
+                    return parts[0].strip(), parts[1].strip()
+        return event_name, ""
+
+    def get_balance(self) -> float:
+        """Get current Betfair balance."""
+        if not self._ensure_login():
+            return 0
+        return self.bf.get_balance()
 
 
 # ======================================================================
@@ -348,33 +314,60 @@ class GameOverlayScanner:
 # ======================================================================
 
 if __name__ == "__main__":
+    import uuid
+    from database import Database
+
     print("=" * 60)
-    print("  Woods System — Game Overlay Scanner")
-    print("  Scanning AFL for overlays...")
+    print("  Woods System — Betfair Overlay Scanner")
     print("=" * 60)
 
     scanner = GameOverlayScanner()
-    results = scanner.scan_sport("aussierules_afl")
+    results = scanner.scan_all_sports()
 
     if not results:
-        print("\nNo overlays found. This can happen if:")
-        print("  - No upcoming AFL games in the next 72 hours")
-        print("  - Odds are tightly aligned across bookmakers")
-        print("  - API key is not configured (check .env)")
+        print("\nNo data found.")
     else:
         print(f"\n{'='*60}")
-        print(f"  Top Overlays ({len(results)} found)")
+        print(f"  {len(results)} selections found")
         print(f"{'='*60}")
-        for i, o in enumerate(results[:20], 1):
-            bf_str = f"  BF={o['betfair_back']}" if o["betfair_back"] else ""
-            line_str = f" ({o['line']})" if o["line"] is not None else ""
+
+        # Show top entries by tier
+        strong = [r for r in results if r["tier"] == "STRONG"]
+        print(f"\n  STRONG tier: {len(strong)} selections")
+        for r in strong[:15]:
+            bf_lay = f"/ Lay {r['betfair_lay']}" if r.get("betfair_lay") else ""
             print(
-                f"  {i:2d}. [{o['tier']:8s}] {o['away_team']} @ {o['home_team']}"
-                f"  |  {o['market']}{line_str}: {o['selection']}"
-                f"  |  best={o['best_odds']:.2f} @ {o['best_book']}"
-                f"  avg={o['avg_odds']:.2f}  edge={o['edge_pct']:.1f}%"
-                f"  prob={o['implied_prob']:.1%}{bf_str}"
+                f"    {r['selection']:35s} Back {r['betfair_back']:<6} {bf_lay}"
+                f"  | ${r.get('back_size',0):>6,.0f} avail"
+                f"  | {r['market']:20s}"
+                f"  | {r['away_team']} @ {r['home_team']}"
+                f"  | {r['sport_label']}"
             )
 
-    if scanner.api_requests_remaining:
-        print(f"\n  API requests remaining: {scanner.api_requests_remaining}")
+        # Save to database
+        db = Database()
+        scan_id = str(uuid.uuid4())[:8]
+
+        try:
+            db.client.table("game_overlays").delete().neq("id", 0).execute()
+        except Exception:
+            pass
+
+        records = []
+        for r in results:
+            rec = {k: v for k, v in r.items()
+                   if k not in ("selection_id", "market_id", "back_size", "lay_size")}
+            rec["scan_id"] = scan_id
+            records.append(rec)
+
+        inserted = 0
+        for i in range(0, len(records), 50):
+            batch = records[i:i + 50]
+            try:
+                res = db.client.table("game_overlays").insert(batch).execute()
+                inserted += len(res.data) if res.data else 0
+            except Exception as e:
+                print(f"  Insert error: {e}")
+
+        print(f"\n  Saved {inserted} rows to game_overlays table")
+        print(f"  Balance: ${scanner.get_balance():,.2f} AUD")
