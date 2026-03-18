@@ -96,10 +96,16 @@ export function SettingsPage() {
   const activeSports = (local['active_sports'] as string[]) || ['basketball_nba']
   const tradingMode = (local['woods_mode'] as string) || 'demo'
   const autoScanEnabled = (local['auto_scan_enabled'] as boolean) ?? false
+  const scanMode = (local['scan_mode'] as string) || 'manual'
 
   const handleModeChange = (mode: string) => {
     setLocal(prev => ({ ...prev, woods_mode: mode }))
     setDirty(prev => new Set(prev).add('woods_mode'))
+  }
+
+  const handleScanModeChange = (mode: string) => {
+    setLocal(prev => ({ ...prev, scan_mode: mode }))
+    setDirty(prev => new Set(prev).add('scan_mode'))
   }
 
   const handleAutoScanToggle = (enabled: boolean) => {
@@ -217,6 +223,67 @@ export function SettingsPage() {
             Auto-scan is enabled. The system will scan all active sports and place qualifying bets autonomously.
           </p>
         )}
+      </div>
+
+      {/* Scan Mode: Autonomous vs Manual */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+        <h3 className="text-sm font-semibold text-gray-300 mb-3">Scan Mode</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => handleScanModeChange('autonomous')}
+            className={`rounded-lg p-3 text-left transition-all ${
+              scanMode === 'autonomous'
+                ? 'bg-cyan-500/10 border-2 border-cyan-500/50'
+                : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
+            }`}
+          >
+            <span className={`text-sm font-semibold ${scanMode === 'autonomous' ? 'text-cyan-400' : 'text-gray-400'}`}>
+              🤖 Autonomous
+            </span>
+            <p className="text-xs text-gray-500 mt-1">System scans and places bets automatically on schedule</p>
+          </button>
+          <button
+            onClick={() => handleScanModeChange('manual')}
+            className={`rounded-lg p-3 text-left transition-all ${
+              scanMode === 'manual'
+                ? 'bg-cyan-500/10 border-2 border-cyan-500/50'
+                : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
+            }`}
+          >
+            <span className={`text-sm font-semibold ${scanMode === 'manual' ? 'text-cyan-400' : 'text-gray-400'}`}>
+              👤 Manual
+            </span>
+            <p className="text-xs text-gray-500 mt-1">You click Scan Now and approve each bet before placement</p>
+          </button>
+        </div>
+      </div>
+
+      {/* Daily Limit */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-300">Daily Bet Limit</h3>
+            <p className="text-xs text-gray-500 mt-1">Maximum total stake per day across all bets</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">$</span>
+            <input
+              type="number"
+              value={typeof local['daily_limit'] === 'number' ? local['daily_limit'] : 2000}
+              onChange={e => {
+                const v = parseFloat(e.target.value)
+                if (!isNaN(v) && v >= 0) {
+                  setLocal(prev => ({ ...prev, daily_limit: v }))
+                  setDirty(prev => new Set(prev).add('daily_limit'))
+                }
+              }}
+              className="w-28 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-right text-sm font-mono text-white focus:border-cyan-500 focus:outline-none"
+              step={100}
+              min={0}
+              max={50000}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

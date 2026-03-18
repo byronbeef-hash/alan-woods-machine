@@ -115,7 +115,7 @@ class KellyBetSizer:
         """
         bets = []
         total_exposure = 0
-        max_total_exposure = self.bankroll * 0.20  # Max 20% of bankroll at risk
+        max_total_exposure = self.bankroll * 0.40  # Max 40% of bankroll at risk
 
         for overlay in overlays:
             bet = self.size_bet(overlay)
@@ -139,6 +139,10 @@ class KellyBetSizer:
 
             total_exposure += bet["bet_size"]
             bets.append(bet)
+
+            # Enforce max auto bets per scan
+            if len(bets) >= config.MAX_AUTO_BETS:
+                break
 
         return bets
 
