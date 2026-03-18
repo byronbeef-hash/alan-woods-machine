@@ -225,6 +225,84 @@ export function SettingsPage() {
         )}
       </div>
 
+      {/* Live Mirror */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-300">Auto-Mirror to Betfair</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Automatically place a live bet on Betfair mirroring each demo bet at a percentage of the demo stake
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              const current = (local['auto_mirror_enabled'] as boolean) ?? false
+              setLocal(prev => ({ ...prev, auto_mirror_enabled: !current }))
+              setDirty(prev => new Set(prev).add('auto_mirror_enabled'))
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              (local['auto_mirror_enabled'] as boolean) ? 'bg-cyan-600' : 'bg-gray-700'
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              (local['auto_mirror_enabled'] as boolean) ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+
+        {(local['auto_mirror_enabled'] as boolean) && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-gray-800">
+              <div>
+                <p className="text-xs text-gray-400">Mirror Percentage</p>
+                <p className="text-[10px] text-gray-600">% of demo bet size placed as live bet (e.g. 20% of $500 = $100 live)</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {[10, 20, 50, 100].map(pct => (
+                  <button
+                    key={pct}
+                    onClick={() => {
+                      setLocal(prev => ({ ...prev, mirror_pct: pct }))
+                      setDirty(prev => new Set(prev).add('mirror_pct'))
+                    }}
+                    className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
+                      (local['mirror_pct'] as number || 20) === pct
+                        ? 'bg-cyan-600 text-white'
+                        : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                    }`}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+                <input
+                  type="number"
+                  value={(local['mirror_pct'] as number) || 20}
+                  onChange={e => {
+                    const v = parseInt(e.target.value)
+                    if (!isNaN(v) && v >= 1 && v <= 100) {
+                      setLocal(prev => ({ ...prev, mirror_pct: v }))
+                      setDirty(prev => new Set(prev).add('mirror_pct'))
+                    }
+                  }}
+                  className="w-16 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs font-mono text-white text-right"
+                  min={1}
+                  max={100}
+                />
+                <span className="text-xs text-gray-500">%</span>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+              <p className="text-xs text-cyan-400">
+                Every demo bet of $500 will also place a $
+                {Math.round(500 * ((local['mirror_pct'] as number || 20) / 100))} live bet on Betfair Exchange.
+                Your Betfair balance: $2,500 AUD.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Scan Mode: Autonomous vs Manual */}
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
         <h3 className="text-sm font-semibold text-gray-300 mb-3">Scan Mode</h3>

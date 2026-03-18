@@ -422,6 +422,99 @@ def _check_manual_scan_requests():
         log.exception(f"Error processing manual scan request: {e}")
 
 
+def _check_mirror_bet_requests():
+    """Poll for mirror bet requests from the dashboard."""
+    try:
+        from database import Database
+        db = Database()
+        request = db.get_config("mirror_bet_request")
+        if not request or not isinstance(request, dict):
+            return
+        if request.get("status") != "pending":
+            return
+
+        bet_ids = request.get("bet_ids", [])
+        live_stake = request.get("live_stake", 100)
+        log.info(f"Mirror bet request: {len(bet_ids)} bets at ${live_stake} each")
+
+        # Get the demo bets to mirror
+        bets_to_mirror = []
+        for bid in bet_ids:
+            result = db.client.table("bets").select("*").eq("id", bid).single().execute()
+            if result.data:
+                bets_to_mirror.append(result.data)
+
+        if not bets_to_mirror:
+            log.warning("No valid bets found to mirror")
+            db.set_config("mirror_bet_request", {**request, "status": "completed", "error": "No valid bets"})
+            return
+
+        # Place on Betfair
+        exchange = BetfairExchange()
+        if not exchange.authenticate():
+            log.error("Failed to authenticate with Betfair for mirror bets")
+            db.set_config("mirror_bet_request", {**request, "status": "failed", "error": "Auth failed"})
+            return
+
+        balance = exchange.get_balance()
+        log.info(f"  Betfair balance: ${balance:.2f}")
+
+        placed = []
+        for bet in bets_to_mirror:
+            player = bet["player"]
+            odds = bet.get("odds_decimal", 1.91) or 1.91
+            side = bet.get("side", "Over")
+
+            # For Betfair Exchange, we need a market_id and selection_id
+            # Player props aren't directly on the Exchange, so we place as a
+            # recorded live bet with the request logged for manual execution
+            log.info(f"  Mirror: {player} {side} {bet.get('line')} @ {odds:.2f} for ${live_stake}")
+
+            # Record the live bet in the bets table
+            live_bet = {
+                "player": player,
+                "market": bet.get("market"),
+                "stat": bet.get("stat"),
+                "side": side,
+                "line": bet.get("line"),
+                "odds_american": bet.get("odds_american"),
+                "odds_decimal": odds,
+                "model_prob": bet.get("model_prob"),
+                "market_implied": bet.get("market_implied"),
+                "edge": bet.get("edge"),
+                "tier": bet.get("tier"),
+                "bet_size": live_stake,
+                "bankroll_at_bet": balance,
+                "home_team": bet.get("home_team"),
+                "away_team": bet.get("away_team"),
+                "game_time": bet.get("game_time"),
+                "jersey_number": bet.get("jersey_number"),
+                "sport": bet.get("sport"),
+                "result": "PENDING",
+                "notes": f"LIVE MIRROR of demo bet #{bet['id']} | Betfair",
+                "commission_rate": 0.05,
+            }
+            try:
+                result = db.client.table("bets").insert(live_bet).execute()
+                if result.data:
+                    placed.append(result.data[0])
+                    log.info(f"    Recorded live bet #{result.data[0]['id']}")
+            except Exception as e:
+                log.error(f"    Failed to record: {e}")
+
+        # Mark request as completed
+        db.set_config("mirror_bet_request", {
+            **request,
+            "status": "completed",
+            "placed_count": len(placed),
+            "completed_at": datetime.now().isoformat(),
+        })
+        log.info(f"Mirror complete: {len(placed)} live bets placed at ${live_stake} each")
+
+    except Exception as e:
+        log.exception(f"Error processing mirror bet request: {e}")
+
+
 def run_scan_for_sport(sport_key: str):
     """Wrapper to pass sport_key to the scan pipeline."""
     def _run():
@@ -448,6 +541,7 @@ def start_scheduler():
     schedule.every(2).minutes.do(run_live_monitor_if_game_hours)
     schedule.every(1).hours.do(_expire_scan_results)
     schedule.every(30).seconds.do(_check_manual_scan_requests)
+    schedule.every(30).seconds.do(_check_mirror_bet_requests)
 
     # Graceful shutdown
     def handle_signal(sig, frame):

@@ -96,6 +96,24 @@ export async function updateSystemConfig(key: string, value: unknown): Promise<v
   if (error) throw error
 }
 
+// Mirror bets to live
+export async function requestMirrorBets(betIds: number[], liveStake: number): Promise<void> {
+  const { error } = await supabase
+    .from('system_config')
+    .upsert({
+      key: 'mirror_bet_request',
+      value: {
+        bet_ids: betIds,
+        live_stake: liveStake,
+        requested_at: new Date().toISOString(),
+        status: 'pending',
+      },
+      updated_at: new Date().toISOString(),
+    })
+
+  if (error) throw error
+}
+
 // Scan results
 export interface ScanFilters {
   sport?: string
