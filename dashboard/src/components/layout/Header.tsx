@@ -1,28 +1,19 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchSystemConfig, updateSystemConfig } from '../../lib/queries'
+import { useQuery } from '@tanstack/react-query'
+import { fetchSystemConfig } from '../../lib/queries'
 
 interface HeaderProps {
   onMenuToggle: () => void
+  viewMode: 'demo' | 'live'
+  onViewModeChange: (mode: 'demo' | 'live') => void
 }
 
-export function Header({ onMenuToggle }: HeaderProps) {
-  const queryClient = useQueryClient()
+export function Header({ onMenuToggle, viewMode, onViewModeChange }: HeaderProps) {
   const { data: config } = useQuery({
     queryKey: ['system-config'],
     queryFn: fetchSystemConfig,
   })
 
-  const mode = (config?.['woods_mode'] as string) || 'demo'
-
-  const toggleMode = useMutation({
-    mutationFn: async () => {
-      const newMode = mode === 'demo' ? 'live' : 'demo'
-      await updateSystemConfig('woods_mode', newMode)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['system-config'] })
-    },
-  })
+  const tradingMode = (config?.['woods_mode'] as string) || 'demo'
 
   return (
     <header className="flex h-14 items-center border-b border-gray-800 bg-gray-950 px-4 lg:px-6">
@@ -46,19 +37,39 @@ export function Header({ onMenuToggle }: HeaderProps) {
         </span>
       </div>
 
-      <div className="ml-auto flex items-center gap-3">
-        {/* Demo/Live toggle - visible on every page */}
-        <button
-          onClick={() => toggleMode.mutate()}
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition-colors ${
-            mode === 'live'
-              ? 'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30'
-              : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
-          }`}
-        >
-          <span className={`h-2 w-2 rounded-full ${mode === 'live' ? 'bg-red-500' : 'bg-emerald-500'} animate-pulse`} />
-          {mode === 'live' ? 'LIVE' : 'DEMO'}
-        </button>
+      <div className="ml-auto flex items-center gap-2">
+        {/* Trading mode indicator */}
+        <span className={`hidden sm:inline text-[10px] px-2 py-0.5 rounded ${
+          tradingMode === 'live'
+            ? 'bg-red-500/10 text-red-400'
+            : 'bg-gray-800 text-gray-500'
+        }`}>
+          Trading: {tradingMode === 'live' ? 'LIVE' : 'DEMO'}
+        </span>
+
+        {/* View toggle — switches which data you see */}
+        <div className="flex rounded-full border border-gray-700 overflow-hidden">
+          <button
+            onClick={() => onViewModeChange('demo')}
+            className={`px-3 py-1 text-xs font-bold transition-colors ${
+              viewMode === 'demo'
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'bg-transparent text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Demo
+          </button>
+          <button
+            onClick={() => onViewModeChange('live')}
+            className={`px-3 py-1 text-xs font-bold transition-colors ${
+              viewMode === 'live'
+                ? 'bg-red-500/20 text-red-400'
+                : 'bg-transparent text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Live
+          </button>
+        </div>
       </div>
     </header>
   )
