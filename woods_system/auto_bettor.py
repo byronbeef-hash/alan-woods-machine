@@ -84,8 +84,10 @@ class BetfairExchange(BettingExchange):
     This is MUCH lower than the 18% rake Alan faced in Hong Kong.
     """
 
-    LOGIN_URL = "https://identitysso.betfair.com/api/login"
-    API_URL = "https://api.betfair.com/exchange/betting/json-rpc/v1"
+    # Use Australian endpoints for .com.au accounts
+    LOGIN_URL = "https://identitysso.betfair.com.au/api/login"
+    API_URL = "https://api.betfair.com.au/exchange/betting/json-rpc/v1"
+    ACCOUNT_URL = "https://api.betfair.com.au/exchange/account/json-rpc/v1"
 
     def __init__(self):
         self.username = os.environ.get("BETFAIR_USERNAME", "")
@@ -102,6 +104,7 @@ class BetfairExchange(BettingExchange):
         try:
             headers = {
                 "X-Application": self.app_key,
+                "Accept": "application/json",
                 "Content-Type": "application/x-www-form-urlencoded",
             }
             data = {"username": self.username, "password": self.password}
@@ -132,6 +135,21 @@ class BetfairExchange(BettingExchange):
             "params": params,
         }
         resp = requests.post(self.API_URL, headers=headers, json=payload, timeout=15)
+        return resp.json()
+
+    def _account_call(self, method: str, params: dict) -> dict:
+        """Make a Betfair Account API call (separate endpoint from betting)."""
+        headers = {
+            "X-Application": self.app_key,
+            "X-Authentication": self.session_token,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "jsonrpc": "2.0",
+            "method": f"AccountAPING/v1.0/{method}",
+            "params": params,
+        }
+        resp = requests.post(self.ACCOUNT_URL, headers=headers, json=payload, timeout=15)
         return resp.json()
 
     def get_market(self, event_id: str, market_type: str) -> dict:
@@ -195,7 +213,7 @@ class BetfairExchange(BettingExchange):
         return {"bet_ref": bet_ref, "status": "NOT_FOUND"}
 
     def get_balance(self) -> float:
-        result = self._api_call("getAccountFunds", {})
+        result = self._account_call("getAccountFunds", {})
         return result.get("result", {}).get("availableToBetBalance", 0)
 
     def _nearest_valid_price(self, price: float) -> float:
