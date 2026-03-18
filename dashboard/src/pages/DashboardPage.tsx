@@ -7,9 +7,11 @@ import { RecentBets } from '../components/dashboard/RecentBets'
 import { TierBreakdown } from '../components/dashboard/TierBreakdown'
 import { ActivityLog } from '../components/dashboard/ActivityLog'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
+import { useViewMode } from '../components/layout/PageShell'
 
 export function DashboardPage() {
   const { data: bets, isLoading, error } = useAllBets()
+  const viewMode = useViewMode()
   useRealtimeBets()
 
   const { data: config } = useQuery({
@@ -20,7 +22,11 @@ export function DashboardPage() {
   if (isLoading) return <LoadingSpinner />
   if (error) return <div className="text-red-400">Error loading data: {error.message}</div>
 
-  const allBets = bets || []
+  // Filter by view mode
+  const rawBets = bets || []
+  const allBets = viewMode === 'live'
+    ? rawBets.filter(b => b.notes?.includes('LIVE'))
+    : rawBets.filter(b => !b.notes?.includes('LIVE'))
   const isDemo = !config || (config['woods_mode'] as string) !== 'live'
 
   return (

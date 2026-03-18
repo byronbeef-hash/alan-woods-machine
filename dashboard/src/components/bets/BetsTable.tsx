@@ -110,7 +110,7 @@ export function BetsTable({ bets }: BetsTableProps) {
             <th className="cursor-pointer px-3 py-2.5 text-right hover:text-gray-300" onClick={() => handleSort('pnl')}>
               P&L{sortIcon('pnl')}
             </th>
-            <th className="px-3 py-2.5"></th>
+            <th className="px-3 py-2.5 min-w-[180px]">Actions</th>
           </tr>
         </thead>
         <tbody>
