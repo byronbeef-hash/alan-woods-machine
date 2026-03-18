@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ScanResult } from '../../lib/types'
 import { SPORT_LABELS, SPORT_COLORS, MARKET_LABELS } from '../../lib/types'
-import { formatOdds, formatPercent, formatEdge, formatGameTime } from '../../lib/utils'
+import { formatOdds, formatPercent, formatEdge } from '../../lib/utils'
 import { TierBadge } from '../common/Badge'
 
 interface ScannerTableProps {
