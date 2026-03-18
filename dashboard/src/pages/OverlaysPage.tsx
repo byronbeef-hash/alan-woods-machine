@@ -129,10 +129,19 @@ async function triggerOverlayScan(sport: string): Promise<void> {
 // Component
 // ---------------------------------------------------------------------------
 
+type SortKey = 'edge_pct' | 'we' | 'best_odds' | 'implied_prob'
+
+function calcWE(o: GameOverlay): number {
+  if (!o.betfair_back || !o.betfair_lay || o.betfair_lay <= 1) return 0
+  return (1 / o.betfair_lay) * o.betfair_back
+}
+
 export function OverlaysPage() {
   const [sport, setSport] = useState('')
   const [scanning, setScanning] = useState(false)
   const [scanMessage, setScanMessage] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('we')
+  const [sortAsc, setSortAsc] = useState(false)
 
   const {
     data: overlays = [],
@@ -274,12 +283,28 @@ export function OverlaysPage() {
                 <th className="px-4 py-3">Game</th>
                 <th className="px-4 py-3">Market</th>
                 <th className="px-4 py-3">Selection</th>
-                <th className="px-4 py-3 text-right">Best Odds</th>
+                <th
+                  className="cursor-pointer px-4 py-3 text-right hover:text-cyan-400 transition-colors"
+                  onClick={() => { if (sortKey === 'best_odds') setSortAsc(!sortAsc); else { setSortKey('best_odds'); setSortAsc(false) } }}
+                >
+                  Best Odds{sortKey === 'best_odds' ? (sortAsc ? ' ▲' : ' ▼') : ''}
+                </th>
                 <th className="px-4 py-3">Bookmaker</th>
                 <th className="px-4 py-3 text-right">Avg Odds</th>
                 <th className="px-4 py-3 text-right" title="Back/Lay spread percentage - tighter = more liquid">Spread %</th>
-                <th className="px-4 py-3 text-right">Implied Prob</th>
-                <th className="px-4 py-3 text-right" title="Win Expectation = P(win) × odds. >1.0 = overlay, <1.0 = underlay, 0.82-1.0 = marginal">W.E.</th>
+                <th
+                  className="cursor-pointer px-4 py-3 text-right hover:text-cyan-400 transition-colors"
+                  onClick={() => { if (sortKey === 'implied_prob') setSortAsc(!sortAsc); else { setSortKey('implied_prob'); setSortAsc(true) } }}
+                >
+                  Implied Prob{sortKey === 'implied_prob' ? (sortAsc ? ' ▲' : ' ▼') : ''}
+                </th>
+                <th
+                  className="cursor-pointer px-4 py-3 text-right hover:text-cyan-400 transition-colors"
+                  title="Win Expectation = P(win) × odds. >1.0 = overlay, <1.0 = underlay, 0.82-1.0 = marginal. Click to sort."
+                  onClick={() => { if (sortKey === 'we') setSortAsc(!sortAsc); else { setSortKey('we'); setSortAsc(false) } }}
+                >
+                  W.E.{sortKey === 'we' ? (sortAsc ? ' ▲' : ' ▼') : ''}
+                </th>
                 <th className="px-4 py-3 text-right">Betfair B/L</th>
                 <th className="px-4 py-3 text-right">Books</th>
                 <th className="px-4 py-3">Start</th>
@@ -287,7 +312,14 @@ export function OverlaysPage() {
               </tr>
             </thead>
             <tbody>
-              {overlays.map(o => {
+              {[...overlays].sort((a, b) => {
+                let va: number, vb: number
+                if (sortKey === 'we') { va = calcWE(a); vb = calcWE(b) }
+                else if (sortKey === 'best_odds') { va = a.best_odds; vb = b.best_odds }
+                else if (sortKey === 'implied_prob') { va = a.implied_prob; vb = b.implied_prob }
+                else { va = a.edge_pct; vb = b.edge_pct }
+                return sortAsc ? va - vb : vb - va
+              }).map(o => {
                 const tierStyle = TIER_STYLES[o.tier] || TIER_STYLES.MARGINAL
                 return (
                   <tr
