@@ -41,7 +41,7 @@ export function KPICards({ bets }: KPICardsProps) {
       <StatCard
         label="Bankroll"
         value={formatBankroll(currentBankroll)}
-        subValue={pending > 0 ? `${pending} pending` : 'No pending bets'}
+        subValue={pending > 0 ? `${pending} placed` : 'No active bets'}
       />
     </div>
   )

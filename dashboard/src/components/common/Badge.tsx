@@ -44,7 +44,7 @@ export function ResultBadge({ result, actualStat, line }: { result: string; actu
       )}>
         {icon}
       </span>
-      {result}{statDetail}
+      {result === 'PENDING' ? 'Placed' : result}{statDetail}
     </span>
   )
 }

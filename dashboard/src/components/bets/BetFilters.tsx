@@ -54,7 +54,7 @@ const results = [
   { value: '', label: 'All Results' },
   { value: 'WIN', label: 'Win' },
   { value: 'LOSS', label: 'Loss' },
-  { value: 'PENDING', label: 'Pending' },
+  { value: 'PENDING', label: 'Placed' },
 ]
 
 const selectClass =
