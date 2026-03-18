@@ -41,8 +41,8 @@ export function DashboardPage() {
         <BankrollChart bets={allBets} />
         <TierBreakdown bets={allBets} />
       </div>
-      <ActivityLog />
       <RecentBets bets={allBets} />
+      <ActivityLog />
     </div>
   )
 }
