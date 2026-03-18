@@ -333,9 +333,10 @@ class Database:
         records = []
         seen_keys = set()
         for r in results:
-            # Deduplicate within this batch by game+player+market+side+line
+            # Deduplicate within this batch by player+market+side+line
+            # (A player can only play one game per day, so game_id is redundant
+            #  and including it causes duplicates in demo mode)
             dedup_key = (
-                r.get("game_id", ""),
                 r.get("player"),
                 r.get("market"),
                 r.get("side"),
