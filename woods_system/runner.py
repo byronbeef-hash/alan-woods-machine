@@ -449,14 +449,15 @@ def _check_mirror_bet_requests():
             db.set_config("mirror_bet_request", {**request, "status": "completed", "error": "No valid bets"})
             return
 
-        # Place on Betfair
-        exchange = BetfairExchange()
-        if not exchange.authenticate():
+        # Connect to Betfair
+        from betfair_client import BetfairClient
+        bf = BetfairClient()
+        if not bf.login():
             log.error("Failed to authenticate with Betfair for mirror bets")
             db.set_config("mirror_bet_request", {**request, "status": "failed", "error": "Auth failed"})
             return
 
-        balance = exchange.get_balance()
+        balance = bf.get_balance()
         log.info(f"  Betfair balance: ${balance:.2f}")
 
         placed = []
