@@ -171,8 +171,13 @@ export function OverlaysPage() {
 
   // Summary stats
   const strongCount = overlays.filter(o => o.tier === 'STRONG').length
-  const bestEdge = overlays.length > 0 ? Math.max(...overlays.map(o => o.edge_pct)) : 0
   const sportsScanned = new Set(overlays.map(o => o.sport_label)).size
+  // Best Win Expectation (highest W.E. > 1.0 = best overlay)
+  const bestWE = overlays.reduce((best, o) => {
+    if (!o.betfair_back || !o.betfair_lay || o.betfair_lay <= 1) return best
+    const we = (1 / o.betfair_lay) * o.betfair_back
+    return we > best ? we : best
+  }, 0)
 
   return (
     <div className="space-y-6">
@@ -241,7 +246,7 @@ export function OverlaysPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatCard label="Total Overlays" value={String(overlays.length)} color="text-cyan-400" />
           <StatCard label="Strong" value={String(strongCount)} color="text-emerald-400" />
-          <StatCard label="Best Edge" value={`${bestEdge.toFixed(1)}%`} color="text-amber-400" />
+          <StatCard label="Best W.E." value={bestWE.toFixed(3)} color={bestWE > 1.0 ? 'text-emerald-400' : 'text-amber-400'} />
           <StatCard label="Sports Scanned" value={String(sportsScanned)} color="text-purple-400" />
         </div>
       )}
@@ -272,7 +277,7 @@ export function OverlaysPage() {
                 <th className="px-4 py-3 text-right">Best Odds</th>
                 <th className="px-4 py-3">Bookmaker</th>
                 <th className="px-4 py-3 text-right">Avg Odds</th>
-                <th className="px-4 py-3 text-right">Edge %</th>
+                <th className="px-4 py-3 text-right" title="Back/Lay spread percentage - tighter = more liquid">Spread %</th>
                 <th className="px-4 py-3 text-right">Implied Prob</th>
                 <th className="px-4 py-3 text-right" title="Win Expectation = P(win) × odds. >1.0 = overlay, <1.0 = underlay, 0.82-1.0 = marginal">W.E.</th>
                 <th className="px-4 py-3 text-right">Betfair B/L</th>
