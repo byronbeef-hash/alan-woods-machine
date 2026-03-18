@@ -81,7 +81,7 @@ export function BetsTable({ bets }: BetsTableProps) {
 
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-800 bg-gray-900">
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[1200px] text-sm">
         <thead>
           <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
             <th className="px-3 py-2.5 text-center">Placed</th>
