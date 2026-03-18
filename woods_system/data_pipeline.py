@@ -301,15 +301,15 @@ class OddsEngine:
         """
         sport = sport_key or config.SPORT_KEY
         if self.api_key == "YOUR_API_KEY_HERE":
-            print("NOTE: Set your Odds API key in config.py to fetch live odds.")
-            print("      Get a free key at https://the-odds-api.com")
-            return self._demo_games()
+            print("ERROR: No Odds API key configured. Set ODDS_API_KEY in .env")
+            print("       Get a free key at https://the-odds-api.com")
+            return []  # Never use demo data — it creates fake games
 
         try:
             url = f"{self.BASE_URL}/sports/{sport}/odds/"
             params = {
                 "apiKey": self.api_key,
-                "regions": "us",
+                "regions": "au,us",
                 "markets": "h2h,spreads,totals",
                 "oddsFormat": "american",
             }
@@ -349,7 +349,7 @@ class OddsEngine:
         """
         sport = sport_key or config.SPORT_KEY
         if self.api_key == "YOUR_API_KEY_HERE":
-            return self._demo_props(market)
+            return []  # Never use demo data
 
         try:
             url = f"{self.BASE_URL}/sports/{sport}/events/{event_id}/odds"
