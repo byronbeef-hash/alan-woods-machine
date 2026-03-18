@@ -1,11 +1,20 @@
 import type { Bet } from '../../lib/types'
 import { formatCurrency, formatOdds, formatDateTime, formatPercent, formatEdge, getMarketLabel } from '../../lib/utils'
-import { TierBadge, ResultBadge } from '../common/Badge'
+import { TierBadge, ResultBadge, DemoBadge } from '../common/Badge'
 import { BetInfoBubble } from '../common/BetInfoBubble'
 import { LiveBadge } from '../common/LiveBadge'
 
 interface RecentBetsProps {
   bets: Bet[]
+}
+
+function formatGameDisplay(bet: Bet): string {
+  if (!bet.home_team || !bet.away_team) return '\u2014'
+  const isLiveOrFinal = bet.game_status === 'live' || bet.game_status === 'final' || bet.game_status === 'completed'
+  if (isLiveOrFinal && bet.home_score !== null && bet.away_score !== null) {
+    return `${bet.away_team} ${bet.away_score} @ ${bet.home_team} ${bet.home_score}`
+  }
+  return `${bet.away_team} @ ${bet.home_team}`
 }
 
 export function RecentBets({ bets }: RecentBetsProps) {
@@ -40,6 +49,7 @@ export function RecentBets({ bets }: RecentBetsProps) {
               <th className="px-4 py-2.5">Tier</th>
               <th className="px-4 py-2.5">Result</th>
               <th className="px-4 py-2.5 text-right">P&L</th>
+              <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -49,14 +59,13 @@ export function RecentBets({ bets }: RecentBetsProps) {
                   {formatDateTime(bet.created_at)}
                 </td>
                 <td className="px-4 py-2.5">
-                  <LiveBadge gameStatus={bet.game_status} gameClock={bet.game_clock} />
+                  <div className="flex items-center gap-1.5">
+                    <LiveBadge gameStatus={bet.game_status} gameClock={bet.game_clock} />
+                    <DemoBadge />
+                  </div>
                 </td>
                 <td className="px-4 py-2.5 text-xs text-amber-400">
-                  {bet.home_team && bet.away_team ? (
-                    bet.home_score !== null && bet.away_score !== null
-                      ? `${bet.away_team} ${bet.away_score} @ ${bet.home_team} ${bet.home_score}`
-                      : `${bet.away_team} @ ${bet.home_team}`
-                  ) : '—'}
+                  {formatGameDisplay(bet)}
                 </td>
                 <td className="px-4 py-2.5 font-medium text-white">
                   <BetInfoBubble bet={bet}>
@@ -77,21 +86,34 @@ export function RecentBets({ bets }: RecentBetsProps) {
                 <td className="px-4 py-2.5 font-mono text-xs text-cyan-400">
                   {bet.live_model_prob !== null && bet.result === 'PENDING'
                     ? formatPercent(bet.live_model_prob)
-                    : bet.model_prob !== null ? formatPercent(bet.model_prob) : '—'}
+                    : bet.model_prob !== null ? formatPercent(bet.model_prob) : '\u2014'}
                 </td>
                 <td className="px-4 py-2.5 font-mono text-xs text-emerald-400">
-                  {bet.edge !== null ? formatEdge(bet.edge) : '—'}
+                  {bet.edge !== null ? formatEdge(bet.edge) : '\u2014'}
                 </td>
                 <td className="px-4 py-2.5">{bet.tier && <TierBadge tier={bet.tier} />}</td>
-                <td className="px-4 py-2.5"><ResultBadge result={bet.result} /></td>
+                <td className="px-4 py-2.5">
+                  <ResultBadge result={bet.result} actualStat={bet.actual_stat} line={bet.line} />
+                </td>
                 <td className="px-4 py-2.5 text-right font-mono text-xs">
                   {bet.pnl !== null ? (
-                    <span className={bet.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                    <span className={bet.pnl >= 0 ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
                       {formatCurrency(bet.pnl)}
                     </span>
                   ) : (
-                    <span className="text-gray-600">—</span>
+                    <span className="text-gray-600">\u2014</span>
                   )}
+                </td>
+                <td className="px-4 py-2.5">
+                  <a
+                    href="https://www.espn.com/nba/scoreboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                    title="ESPN Box Score"
+                  >
+                    ESPN
+                  </a>
                 </td>
               </tr>
             ))}

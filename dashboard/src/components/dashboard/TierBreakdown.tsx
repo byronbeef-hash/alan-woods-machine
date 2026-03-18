@@ -1,5 +1,8 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, LabelList } from 'recharts'
+import type { RenderableText } from 'recharts/types/component/Text'
 import type { Bet } from '../../lib/types'
+
+const pctFormatter = (v: RenderableText) => `${v}%`
 
 interface TierBreakdownProps {
   bets: Bet[]
@@ -43,8 +46,18 @@ export function TierBreakdown({ bets }: TierBreakdownProps) {
             labelStyle={{ color: '#9ca3af' }}
           />
           <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af' }} />
-          <Bar dataKey="winRate" name="Win Rate %" fill="#22c55e" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="roi" name="ROI %" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="winRate" name="Win Rate %" fill="#22c55e" radius={[4, 4, 0, 0]}>
+            <LabelList dataKey="winRate" position="top" fill="#22c55e" fontSize={11} formatter={pctFormatter} />
+            {data.map((entry) => (
+              <Cell key={entry.tier} fill="#22c55e" />
+            ))}
+          </Bar>
+          <Bar dataKey="roi" name="ROI %" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+            <LabelList dataKey="roi" position="top" fill="#3b82f6" fontSize={11} formatter={pctFormatter} />
+            {data.map((entry) => (
+              <Cell key={entry.tier} fill="#3b82f6" />
+            ))}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
