@@ -186,28 +186,71 @@ class PropModel:
             "adjustments": adjustments,
         }
 
+    def _load_season_stats(self) -> dict:
+        """Load real NBA season stats for all players. Cached after first call."""
+        if hasattr(self, '_season_stats_cache') and self._season_stats_cache:
+            return self._season_stats_cache
+
+        try:
+            from nba_api.stats.endpoints import leaguedashplayerstats
+            print("  [Model] Loading real NBA season stats...")
+            stats = leaguedashplayerstats.LeagueDashPlayerStats(
+                season=config.NBA_SEASON,
+                per_mode_detailed='PerGame',
+                timeout=30,
+            )
+            df = stats.get_data_frames()[0]
+            cache = {}
+            for _, row in df.iterrows():
+                name = row['PLAYER_NAME']
+                cache[name] = {
+                    'PTS': float(row['PTS']),
+                    'REB': float(row['REB']),
+                    'AST': float(row['AST']),
+                    'FG3M': float(row['FG3M']),
+                    'STL': float(row['STL']),
+                    'BLK': float(row['BLK']),
+                    'TOV': float(row['TOV']),
+                    'GP': int(row['GP']),
+                    'MIN': float(row['MIN']),
+                }
+            print(f"  [Model] Loaded stats for {len(cache)} players")
+            self._season_stats_cache = cache
+            return cache
+        except Exception as e:
+            print(f"  [Model] Could not load NBA stats: {e}")
+            self._season_stats_cache = {}
+            return {}
+
     def _demo_prediction(
         self, player_name: str, market: str, line: float,
         is_home: bool, rest_days: int
     ) -> dict:
         """
-        Demo prediction using reasonable estimates when NBA API isn't available.
-        Uses known player averages to produce realistic outputs.
+        Prediction using real NBA season averages from nba_api.
+        Falls back to skipping the player if no real stats available.
         """
         stat_key = self.STAT_MAP.get(market, "PTS")
 
-        # Approximate known player averages (2024-25 style)
-        known_players = {
-            "Luka Doncic":                  {"PTS": 28.5, "REB": 8.8, "AST": 8.2, "FG3M": 3.1},
-            "LeBron James":                 {"PTS": 25.0, "REB": 7.5, "AST": 7.8, "FG3M": 2.1},
-            "Jayson Tatum":                 {"PTS": 27.0, "REB": 8.5, "AST": 4.5, "FG3M": 2.8},
-            "Nikola Jokic":                 {"PTS": 26.5, "REB": 12.3, "AST": 9.5, "FG3M": 1.1},
-            "Anthony Edwards":              {"PTS": 25.5, "REB": 5.5, "AST": 5.0, "FG3M": 2.8},
-            "Shai Gilgeous-Alexander":      {"PTS": 31.5, "REB": 5.5, "AST": 6.0, "FG3M": 1.8},
-        }
+        # Load real season stats (cached after first call)
+        season_stats = self._load_season_stats()
 
-        player_stats = known_players.get(player_name, {"PTS": 20, "REB": 5, "AST": 4, "FG3M": 1.5})
-        base_mean = player_stats.get(stat_key, 20)
+        # Look up real player stats
+        player_stats = season_stats.get(player_name)
+        if not player_stats:
+            # Try fuzzy match (e.g. "Bub Carrington" vs "Carlton Carrington")
+            for name, stats in season_stats.items():
+                if player_name.split()[-1].lower() in name.lower():
+                    player_stats = stats
+                    break
+
+        if not player_stats or player_stats.get('GP', 0) < 10:
+            # Skip players with no stats or too few games — don't guess
+            return None
+
+        base_mean = player_stats.get(stat_key, 0)
+        if base_mean <= 0:
+            return None  # No data for this stat
 
         # Standard deviations (typical NBA variance by stat type)
         std_estimates = {"PTS": 7.5, "REB": 3.2, "AST": 2.8, "FG3M": 1.5}
