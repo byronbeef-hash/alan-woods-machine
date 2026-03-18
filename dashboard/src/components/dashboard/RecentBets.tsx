@@ -83,7 +83,7 @@ export function RecentBets({ bets }: RecentBetsProps) {
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-1.5">
-                    <LiveBadge gameStatus={bet.game_status} gameClock={bet.game_clock} />
+                    <LiveBadge gameStatus={bet.game_status} gameClock={bet.game_clock} result={bet.result} />
                   </div>
                 </td>
                 <td className="px-3 py-2.5 text-xs text-amber-400">
