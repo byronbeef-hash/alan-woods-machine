@@ -7,6 +7,7 @@ import { TierBadge } from '../common/Badge'
 interface ScannerTableProps {
   results: ScanResult[]
   onPlaceBet?: (result: ScanResult) => void
+  onCancelBet?: (resultId: number) => void
   placingId?: number | null
 }
 
@@ -44,7 +45,8 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-export function ScannerTable({ results, onPlaceBet, placingId }: ScannerTableProps) {
+export function ScannerTable({ results, onPlaceBet, onCancelBet, placingId }: ScannerTableProps) {
+  const [confirmCancel, setConfirmCancel] = useState<number | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('edge')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
@@ -188,17 +190,45 @@ export function ScannerTable({ results, onPlaceBet, placingId }: ScannerTablePro
                 ) : '—'}
               </td>
               <td className="px-4 py-2.5">
-                {result.status === 'ACTIVE' && onPlaceBet ? (
-                  <button
-                    onClick={() => onPlaceBet(result)}
-                    disabled={placingId === result.id}
-                    className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {placingId === result.id ? 'Placing...' : 'Place Bet'}
-                  </button>
-                ) : result.status === 'PLACED' ? (
-                  <span className="text-xs text-gray-500">Auto-placed</span>
-                ) : null}
+                <div className="flex items-center gap-2">
+                  {result.status === 'ACTIVE' && onPlaceBet ? (
+                    <button
+                      onClick={() => onPlaceBet(result)}
+                      disabled={placingId === result.id}
+                      className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {placingId === result.id ? 'Placing...' : 'Place Bet'}
+                    </button>
+                  ) : result.status === 'PLACED' ? (
+                    <span className="text-xs text-gray-500">Placed</span>
+                  ) : null}
+                  {onCancelBet && (
+                    confirmCancel === result.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { onCancelBet(result.id); setConfirmCancel(null) }}
+                          className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] text-white hover:bg-red-500"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => setConfirmCancel(null)}
+                          className="text-[10px] text-gray-500 hover:text-gray-300"
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmCancel(result.id)}
+                        className="text-xs text-gray-600 hover:text-red-400 transition-colors"
+                        title="Cancel this bet"
+                      >
+                        &times;
+                      </button>
+                    )
+                  )}
+                </div>
               </td>
             </tr>
           ))}

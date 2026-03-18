@@ -68,6 +68,16 @@ export async function fetchFilteredBets(filters: BetFilters): Promise<Bet[]> {
   return (data || []) as Bet[]
 }
 
+// Cancel a scan result
+export async function cancelScanResult(id: number): Promise<void> {
+  const { error } = await supabase
+    .from('scan_results')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
+}
+
 // System config
 export interface SystemConfigRow {
   key: string

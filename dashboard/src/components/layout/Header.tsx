@@ -1,8 +1,29 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { fetchSystemConfig, updateSystemConfig } from '../../lib/queries'
+
 interface HeaderProps {
   onMenuToggle: () => void
 }
 
 export function Header({ onMenuToggle }: HeaderProps) {
+  const queryClient = useQueryClient()
+  const { data: config } = useQuery({
+    queryKey: ['system-config'],
+    queryFn: fetchSystemConfig,
+  })
+
+  const mode = (config?.['woods_mode'] as string) || 'demo'
+
+  const toggleMode = useMutation({
+    mutationFn: async () => {
+      const newMode = mode === 'demo' ? 'live' : 'demo'
+      await updateSystemConfig('woods_mode', newMode)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-config'] })
+    },
+  })
+
   return (
     <header className="flex h-14 items-center border-b border-gray-800 bg-gray-950 px-4 lg:px-6">
       {/* Hamburger menu - mobile only */}
@@ -24,11 +45,20 @@ export function Header({ onMenuToggle }: HeaderProps) {
           NBA Props
         </span>
       </div>
+
       <div className="ml-auto flex items-center gap-3">
-        <span className="flex items-center gap-1.5 text-xs text-gray-400">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          Live
-        </span>
+        {/* Demo/Live toggle - visible on every page */}
+        <button
+          onClick={() => toggleMode.mutate()}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition-colors ${
+            mode === 'live'
+              ? 'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30'
+              : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
+          }`}
+        >
+          <span className={`h-2 w-2 rounded-full ${mode === 'live' ? 'bg-red-500' : 'bg-emerald-500'} animate-pulse`} />
+          {mode === 'live' ? 'LIVE' : 'DEMO'}
+        </button>
       </div>
     </header>
   )

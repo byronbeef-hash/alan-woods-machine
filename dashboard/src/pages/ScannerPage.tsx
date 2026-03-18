@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { ScanFilters } from '../lib/queries'
+import { cancelScanResult } from '../lib/queries'
 import type { ScanResult } from '../lib/types'
 import { SPORT_LABELS } from '../lib/types'
 import { useScanResults, usePlaceBetFromScan, useRealtimeScanResults, useTriggerScan, useScanStatus } from '../hooks/useScanResults'
@@ -52,6 +54,18 @@ export function ScannerPage() {
     } finally {
       setPlacingId(null)
     }
+  }
+
+  const queryClient = useQueryClient()
+  const cancelMutation = useMutation({
+    mutationFn: cancelScanResult,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scan_results'] })
+    },
+  })
+
+  const handleCancelBet = (resultId: number) => {
+    cancelMutation.mutate(resultId)
   }
 
   const handleScanNow = async () => {
@@ -170,7 +184,7 @@ export function ScannerPage() {
                   {placedResults.length}
                 </span>
               </div>
-              <ScannerTable results={placedResults} />
+              <ScannerTable results={placedResults} onCancelBet={handleCancelBet} />
             </div>
           )}
 
@@ -185,6 +199,7 @@ export function ScannerPage() {
             <ScannerTable
               results={activeResults}
               onPlaceBet={handlePlaceBet}
+              onCancelBet={handleCancelBet}
               placingId={placingId}
             />
           </div>

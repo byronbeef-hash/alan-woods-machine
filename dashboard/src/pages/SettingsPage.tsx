@@ -186,10 +186,106 @@ export function SettingsPage() {
         </div>
 
         {tradingMode === 'live' && (
-          <div className="mt-3 rounded-lg bg-red-500/10 border border-red-500/30 p-3">
-            <p className="text-xs text-red-400 font-medium">
-              ⚠️ Live mode will place real bets with real money on Betfair. Ensure your account is funded and API credentials are configured.
-            </p>
+          <div className="mt-3 space-y-3">
+            <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3">
+              <p className="text-xs text-red-400 font-medium">
+                ⚠️ Live mode will place real bets with real money on Betfair. Ensure your account is funded and API credentials are configured.
+              </p>
+            </div>
+
+            {/* Live Bet Configuration */}
+            <div className="rounded-lg bg-gray-800 p-4 space-y-3">
+              <h4 className="text-xs font-semibold text-gray-300">Live Bet Configuration</h4>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-400">Live Bet Size</p>
+                  <p className="text-[10px] text-gray-600">Fixed amount per live bet on Betfair</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {[50, 100, 200, 500].map(amt => (
+                    <button
+                      key={amt}
+                      onClick={() => {
+                        setLocal(prev => ({ ...prev, live_bet_size: amt }))
+                        setDirty(prev => new Set(prev).add('live_bet_size'))
+                      }}
+                      className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
+                        (local['live_bet_size'] as number || 100) === amt
+                          ? 'bg-red-600 text-white'
+                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                      }`}
+                    >
+                      ${amt}
+                    </button>
+                  ))}
+                  <input
+                    type="number"
+                    value={(local['live_bet_size'] as number) || 100}
+                    onChange={e => {
+                      const v = parseInt(e.target.value)
+                      if (!isNaN(v) && v >= 1) {
+                        setLocal(prev => ({ ...prev, live_bet_size: v }))
+                        setDirty(prev => new Set(prev).add('live_bet_size'))
+                      }
+                    }}
+                    className="w-20 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs font-mono text-white text-right"
+                    min={1}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-400">Max Daily Live Bets</p>
+                  <p className="text-[10px] text-gray-600">Maximum number of live bets per day</p>
+                </div>
+                <input
+                  type="number"
+                  value={(local['max_daily_live_bets'] as number) || 10}
+                  onChange={e => {
+                    const v = parseInt(e.target.value)
+                    if (!isNaN(v) && v >= 1) {
+                      setLocal(prev => ({ ...prev, max_daily_live_bets: v }))
+                      setDirty(prev => new Set(prev).add('max_daily_live_bets'))
+                    }
+                  }}
+                  className="w-20 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs font-mono text-white text-right"
+                  min={1}
+                  max={50}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-400">Min Edge for Live</p>
+                  <p className="text-[10px] text-gray-600">Only mirror bets with edge above this %</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={Math.round(((local['min_live_edge'] as number) || 0.05) * 100)}
+                    onChange={e => {
+                      const v = parseInt(e.target.value)
+                      if (!isNaN(v) && v >= 1 && v <= 100) {
+                        setLocal(prev => ({ ...prev, min_live_edge: v / 100 }))
+                        setDirty(prev => new Set(prev).add('min_live_edge'))
+                      }
+                    }}
+                    className="w-16 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs font-mono text-white text-right"
+                    min={1}
+                    max={100}
+                  />
+                  <span className="text-xs text-gray-500">%</span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-gray-700">
+                <p className="text-[10px] text-gray-500">
+                  Betfair balance: $2,500 AUD | Commission: 5% | App key: mbbTz...NoOl (delay)
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
