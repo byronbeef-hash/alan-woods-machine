@@ -37,37 +37,46 @@ export function RecentBets({ bets }: RecentBetsProps) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
-              <th className="px-4 py-2.5">Time</th>
-              <th className="px-4 py-2.5">Status</th>
-              <th className="px-4 py-2.5">Game</th>
-              <th className="px-4 py-2.5">Player</th>
-              <th className="px-4 py-2.5">Market</th>
-              <th className="px-4 py-2.5">Play</th>
-              <th className="px-4 py-2.5">Odds</th>
-              <th className="px-4 py-2.5">Win Prob</th>
-              <th className="px-4 py-2.5">Edge</th>
-              <th className="px-4 py-2.5">Tier</th>
-              <th className="px-4 py-2.5">Result</th>
-              <th className="px-4 py-2.5 text-right">P&L</th>
-              <th className="px-4 py-2.5"></th>
+              <th className="px-3 py-2.5 text-center">Placed</th>
+              <th className="px-3 py-2.5">Time</th>
+              <th className="px-3 py-2.5">Status</th>
+              <th className="px-3 py-2.5">Game</th>
+              <th className="px-3 py-2.5">Player</th>
+              <th className="px-3 py-2.5">Market</th>
+              <th className="px-3 py-2.5">Play</th>
+              <th className="px-3 py-2.5">Odds</th>
+              <th className="px-3 py-2.5">Win Prob</th>
+              <th className="px-3 py-2.5">Edge</th>
+              <th className="px-3 py-2.5">Tier</th>
+              <th className="px-3 py-2.5">Result</th>
+              <th className="px-3 py-2.5 text-right">P&L</th>
+              <th className="px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
             {recent.map(bet => (
               <tr key={bet.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                <td className="px-4 py-2.5 text-xs text-gray-400">
-                  {formatDateTime(bet.created_at)}
-                </td>
-                <td className="px-4 py-2.5">
-                  <div className="flex items-center gap-1.5">
-                    <LiveBadge gameStatus={bet.game_status} gameClock={bet.game_clock} />
-                    <DemoBadge />
+                {/* Placed checkbox */}
+                <td className="px-3 py-2.5 text-center">
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="inline-flex h-4 w-4 items-center justify-center rounded border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 text-xs">
+                      ✓
+                    </span>
+                    <span className="text-[10px] font-medium text-violet-400">DEMO</span>
                   </div>
                 </td>
-                <td className="px-4 py-2.5 text-xs text-amber-400">
+                <td className="px-3 py-2.5 text-xs text-gray-400">
+                  {formatDateTime(bet.created_at)}
+                </td>
+                <td className="px-3 py-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <LiveBadge gameStatus={bet.game_status} gameClock={bet.game_clock} />
+                  </div>
+                </td>
+                <td className="px-3 py-2.5 text-xs text-amber-400">
                   {formatGameDisplay(bet)}
                 </td>
-                <td className="px-4 py-2.5 font-medium text-white">
+                <td className="px-3 py-2.5 font-medium text-white">
                   <BetInfoBubble bet={bet}>
                     <span className="cursor-pointer underline decoration-gray-600 underline-offset-2 hover:decoration-gray-400">
                       {bet.jersey_number && <span className="text-gray-500 font-mono text-xs mr-1">#{bet.jersey_number}</span>}

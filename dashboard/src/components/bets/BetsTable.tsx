@@ -59,48 +59,57 @@ export function BetsTable({ bets }: BetsTableProps) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-800 text-left text-xs text-gray-500">
-            <th className="cursor-pointer px-4 py-2.5 hover:text-gray-300" onClick={() => handleSort('created_at')}>
+            <th className="px-3 py-2.5 text-center">Placed</th>
+            <th className="cursor-pointer px-3 py-2.5 hover:text-gray-300" onClick={() => handleSort('created_at')}>
               Date{sortIcon('created_at')}
             </th>
-            <th className="px-4 py-2.5">Status</th>
-            <th className="px-4 py-2.5">Game</th>
-            <th className="cursor-pointer px-4 py-2.5 hover:text-gray-300" onClick={() => handleSort('player')}>
+            <th className="px-3 py-2.5">Status</th>
+            <th className="px-3 py-2.5">Game</th>
+            <th className="cursor-pointer px-3 py-2.5 hover:text-gray-300" onClick={() => handleSort('player')}>
               Player{sortIcon('player')}
             </th>
-            <th className="cursor-pointer px-4 py-2.5 hover:text-gray-300" onClick={() => handleSort('market')}>
+            <th className="cursor-pointer px-3 py-2.5 hover:text-gray-300" onClick={() => handleSort('market')}>
               Market{sortIcon('market')}
             </th>
-            <th className="px-4 py-2.5">Play</th>
-            <th className="px-4 py-2.5">Odds</th>
-            <th className="px-4 py-2.5">Win Prob</th>
-            <th className="cursor-pointer px-4 py-2.5 hover:text-gray-300" onClick={() => handleSort('edge')}>
+            <th className="px-3 py-2.5">Play</th>
+            <th className="px-3 py-2.5">Odds</th>
+            <th className="px-3 py-2.5">Win Prob</th>
+            <th className="cursor-pointer px-3 py-2.5 hover:text-gray-300" onClick={() => handleSort('edge')}>
               Edge{sortIcon('edge')}
             </th>
-            <th className="px-4 py-2.5">Tier</th>
-            <th className="cursor-pointer px-4 py-2.5 hover:text-gray-300" onClick={() => handleSort('bet_size')}>
+            <th className="px-3 py-2.5">Tier</th>
+            <th className="cursor-pointer px-3 py-2.5 hover:text-gray-300" onClick={() => handleSort('bet_size')}>
               Size{sortIcon('bet_size')}
             </th>
-            <th className="px-4 py-2.5">Result</th>
-            <th className="cursor-pointer px-4 py-2.5 text-right hover:text-gray-300" onClick={() => handleSort('pnl')}>
+            <th className="px-3 py-2.5">Result</th>
+            <th className="cursor-pointer px-3 py-2.5 text-right hover:text-gray-300" onClick={() => handleSort('pnl')}>
               P&L{sortIcon('pnl')}
             </th>
-            <th className="px-4 py-2.5"></th>
+            <th className="px-3 py-2.5"></th>
           </tr>
         </thead>
         <tbody>
           {sorted.map(bet => (
             <tr key={bet.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-              <td className="px-4 py-2.5 text-xs text-gray-400">{formatDate(bet.created_at)}</td>
-              <td className="px-4 py-2.5">
-                <div className="flex items-center gap-1.5">
-                  <LiveBadge gameStatus={bet.game_status} gameClock={bet.game_clock} />
-                  <DemoBadge />
+              {/* Placed checkbox */}
+              <td className="px-3 py-2.5 text-center">
+                <div className="flex items-center justify-center gap-1">
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 text-xs">
+                    ✓
+                  </span>
+                  <span className="text-[10px] font-medium text-violet-400">DEMO</span>
                 </div>
               </td>
-              <td className="px-4 py-2.5 text-xs text-amber-400">
+              <td className="px-3 py-2.5 text-xs text-gray-400">{formatDate(bet.created_at)}</td>
+              <td className="px-3 py-2.5">
+                <div className="flex items-center gap-1.5">
+                  <LiveBadge gameStatus={bet.game_status} gameClock={bet.game_clock} />
+                </div>
+              </td>
+              <td className="px-3 py-2.5 text-xs text-amber-400">
                 {formatGameDisplay(bet)}
               </td>
-              <td className="px-4 py-2.5 font-medium text-white">
+              <td className="px-3 py-2.5 font-medium text-white">
                 <BetInfoBubble bet={bet}>
                   <span className="cursor-pointer underline decoration-gray-600 underline-offset-2 hover:decoration-gray-400">
                     {bet.jersey_number && <span className="text-gray-500 font-mono text-xs mr-1">#{bet.jersey_number}</span>}
@@ -108,30 +117,30 @@ export function BetsTable({ bets }: BetsTableProps) {
                   </span>
                 </BetInfoBubble>
               </td>
-              <td className="px-4 py-2.5 text-gray-300">{getMarketLabel(bet.market)}</td>
-              <td className="px-4 py-2.5 text-gray-300">
+              <td className="px-3 py-2.5 text-gray-300">{getMarketLabel(bet.market)}</td>
+              <td className="px-3 py-2.5 text-gray-300">
                 {bet.side} {bet.line}
                 {bet.live_stat !== null && bet.result === 'PENDING' && (
                   <span className="ml-2 font-mono text-xs text-cyan-400">({bet.live_stat})</span>
                 )}
               </td>
-              <td className="px-4 py-2.5 text-gray-300">{formatOdds(bet.odds_american)}</td>
-              <td className="px-4 py-2.5 font-mono text-xs text-cyan-400">
+              <td className="px-3 py-2.5 text-gray-300">{formatOdds(bet.odds_american)}</td>
+              <td className="px-3 py-2.5 font-mono text-xs text-cyan-400">
                 {bet.live_model_prob !== null && bet.result === 'PENDING'
                   ? formatPercent(bet.live_model_prob)
                   : bet.model_prob !== null ? formatPercent(bet.model_prob) : '\u2014'}
               </td>
-              <td className="px-4 py-2.5 font-mono text-xs text-emerald-400">
+              <td className="px-3 py-2.5 font-mono text-xs text-emerald-400">
                 {bet.edge !== null ? formatEdge(bet.edge) : '\u2014'}
               </td>
-              <td className="px-4 py-2.5">{bet.tier && <TierBadge tier={bet.tier} />}</td>
-              <td className="px-4 py-2.5 font-mono text-xs text-gray-300">
+              <td className="px-3 py-2.5">{bet.tier && <TierBadge tier={bet.tier} />}</td>
+              <td className="px-3 py-2.5 font-mono text-xs text-gray-300">
                 {bet.bet_size !== null ? `$${bet.bet_size.toFixed(0)}` : '\u2014'}
               </td>
-              <td className="px-4 py-2.5">
+              <td className="px-3 py-2.5">
                 <ResultBadge result={bet.result} actualStat={bet.actual_stat} line={bet.line} />
               </td>
-              <td className="px-4 py-2.5 text-right font-mono text-xs">
+              <td className="px-3 py-2.5 text-right font-mono text-xs">
                 {bet.pnl !== null ? (
                   <span className={bet.pnl >= 0 ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
                     {formatCurrency(bet.pnl)}
@@ -140,7 +149,7 @@ export function BetsTable({ bets }: BetsTableProps) {
                   <span className="text-gray-600">\u2014</span>
                 )}
               </td>
-              <td className="px-4 py-2.5">
+              <td className="px-3 py-2.5">
                 <a
                   href="https://www.espn.com/nba/scoreboard"
                   target="_blank"
