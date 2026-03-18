@@ -1,6 +1,6 @@
 import type { Bet } from '../../lib/types'
 import { formatCurrency, formatOdds, formatDateTime, formatPercent, formatEdge, getMarketLabel } from '../../lib/utils'
-import { TierBadge, ResultBadge, DemoBadge } from '../common/Badge'
+import { TierBadge, ResultBadge } from '../common/Badge'
 import { BetInfoBubble } from '../common/BetInfoBubble'
 import { LiveBadge } from '../common/LiveBadge'
 
