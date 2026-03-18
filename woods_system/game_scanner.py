@@ -219,6 +219,7 @@ class GameOverlayScanner:
                         "worst_odds": back_price,
                         "edge_pct": spread_pct,
                         "implied_prob": implied_prob,
+                        "win_expectation": win_expectation,
                         "num_bookmakers": 1,
                         "betfair_back": back_price,
                         "betfair_lay": lay_price,
@@ -356,7 +357,7 @@ if __name__ == "__main__":
         records = []
         for r in results:
             rec = {k: v for k, v in r.items()
-                   if k not in ("selection_id", "market_id", "back_size", "lay_size")}
+                   if k not in ("selection_id", "market_id", "back_size", "lay_size", "win_expectation")}
             rec["scan_id"] = scan_id
             records.append(rec)
 

@@ -274,6 +274,7 @@ export function OverlaysPage() {
                 <th className="px-4 py-3 text-right">Avg Odds</th>
                 <th className="px-4 py-3 text-right">Edge %</th>
                 <th className="px-4 py-3 text-right">Implied Prob</th>
+                <th className="px-4 py-3 text-right" title="Win Expectation = P(win) × odds. >1.0 = overlay, <1.0 = underlay, 0.82-1.0 = marginal">W.E.</th>
                 <th className="px-4 py-3 text-right">Betfair B/L</th>
                 <th className="px-4 py-3 text-right">Books</th>
                 <th className="px-4 py-3">Start</th>
@@ -330,7 +331,18 @@ export function OverlaysPage() {
 
                     {/* Implied Prob */}
                     <td className="px-4 py-3 text-right font-mono text-gray-400">
-                      {(o.implied_prob * 100).toFixed(1)}%
+                      {(o.implied_prob).toFixed(1)}%
+                    </td>
+
+                    {/* Win Expectation = P(win) × back odds */}
+                    <td className="px-4 py-3 text-right font-mono font-bold">
+                      {(() => {
+                        if (!o.betfair_back || !o.betfair_lay || o.betfair_lay <= 1) return <span className="text-gray-600">&mdash;</span>
+                        const trueProb = 1 / o.betfair_lay
+                        const we = trueProb * o.betfair_back
+                        const color = we > 1.0 ? 'text-emerald-400' : we >= 0.82 ? 'text-amber-400' : 'text-red-400'
+                        return <span className={color}>{we.toFixed(3)}</span>
+                      })()}
                     </td>
 
                     {/* Betfair Back/Lay */}
