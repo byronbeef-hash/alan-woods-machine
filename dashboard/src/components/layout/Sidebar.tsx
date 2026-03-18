@@ -4,6 +4,7 @@ import clsx from 'clsx'
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '~' },
   { to: '/scanner', label: 'Scanner', icon: '!' },
+  { to: '/overlays', label: 'Overlays', icon: '⚡' },
   { to: '/bets', label: 'Bets', icon: '#' },
   { to: '/markets', label: 'Markets', icon: '%' },
   { to: '/settings', label: 'Settings', icon: '*' },
