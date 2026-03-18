@@ -20,10 +20,33 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
-    const bubbleHeight = 560
+    const bubbleW = 320
+    const margin = 8
+
+    // Horizontal: keep within viewport
+    let left = rect.left
+    if (left + bubbleW > window.innerWidth - margin) {
+      left = window.innerWidth - bubbleW - margin
+    }
+    if (left < margin) left = margin
+
+    // Vertical: measure actual bubble height after render, fallback to estimate
+    const bubbleEl = bubbleRef.current
+    const bubbleH = bubbleEl ? bubbleEl.offsetHeight : 560
     const spaceBelow = window.innerHeight - rect.bottom
-    const top = spaceBelow < bubbleHeight ? rect.top - bubbleHeight - 4 : rect.bottom + 4
-    setPos({ top, left: rect.left })
+    const spaceAbove = rect.top
+
+    let top: number
+    if (spaceBelow >= bubbleH + margin) {
+      top = rect.bottom + 4
+    } else if (spaceAbove >= bubbleH + margin) {
+      top = rect.top - bubbleH - 4
+    } else {
+      // Not enough space either way — center vertically and enable scroll
+      top = margin
+    }
+
+    setPos({ top, left })
   }, [])
 
   useEffect(() => {
@@ -36,6 +59,8 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
     if (open) {
       document.addEventListener('mousedown', handleClick)
       updatePosition()
+      // Re-position after render so we can measure actual bubble height
+      requestAnimationFrame(updatePosition)
     }
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open, updatePosition])
@@ -70,8 +95,13 @@ export function BetInfoBubble({ bet, children }: BetInfoBubbleProps) {
       {open && createPortal(
         <div
           ref={bubbleRef}
-          className="fixed z-[9999] w-80 rounded-lg border border-gray-700 shadow-2xl"
-          style={{ backgroundColor: '#1a2332', top: pos.top, left: pos.left }}
+          className="fixed z-[9999] w-80 rounded-lg border border-gray-700 shadow-2xl overflow-y-auto"
+          style={{
+            backgroundColor: '#1a2332',
+            top: pos.top,
+            left: pos.left,
+            maxHeight: `calc(100vh - 16px)`,
+          }}
         >
           {/* Header */}
           <div className="border-b border-gray-700 px-4 py-3">
