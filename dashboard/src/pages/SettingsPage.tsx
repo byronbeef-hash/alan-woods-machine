@@ -258,32 +258,120 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {/* Daily Limit */}
+      {/* Risk Management */}
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-300">Daily Bet Limit</h3>
-            <p className="text-xs text-gray-500 mt-1">Maximum total stake per day across all bets</p>
+        <h3 className="text-sm font-semibold text-gray-300 mb-4">Risk Management</h3>
+        <div className="space-y-4">
+          {/* Bankroll Limit */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400">Bankroll Limit</p>
+              <p className="text-[10px] text-gray-600 mt-0.5">Maximum total bankroll for betting. System stops when reached.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">$</span>
+              <input
+                type="number"
+                value={typeof local['bankroll_limit'] === 'number' ? local['bankroll_limit'] : 10000}
+                onChange={e => {
+                  const v = parseFloat(e.target.value)
+                  if (!isNaN(v) && v >= 0) {
+                    setLocal(prev => ({ ...prev, bankroll_limit: v }))
+                    setDirty(prev => new Set(prev).add('bankroll_limit'))
+                  }
+                }}
+                className="w-28 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-right text-sm font-mono text-white focus:border-cyan-500 focus:outline-none"
+                step={500}
+                min={0}
+                max={100000}
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">$</span>
-            <input
-              type="number"
-              value={typeof local['daily_limit'] === 'number' ? local['daily_limit'] : 2000}
-              onChange={e => {
-                const v = parseFloat(e.target.value)
-                if (!isNaN(v) && v >= 0) {
-                  setLocal(prev => ({ ...prev, daily_limit: v }))
-                  setDirty(prev => new Set(prev).add('daily_limit'))
-                }
-              }}
-              className="w-28 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-right text-sm font-mono text-white focus:border-cyan-500 focus:outline-none"
-              step={100}
-              min={0}
-              max={50000}
-            />
+
+          {/* Max Daily Spend */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400">Max Daily Spend</p>
+              <p className="text-[10px] text-gray-600 mt-0.5">Maximum total stake per day across all bets</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">$</span>
+              <input
+                type="number"
+                value={typeof local['daily_limit'] === 'number' ? local['daily_limit'] : 2000}
+                onChange={e => {
+                  const v = parseFloat(e.target.value)
+                  if (!isNaN(v) && v >= 0) {
+                    setLocal(prev => ({ ...prev, daily_limit: v }))
+                    setDirty(prev => new Set(prev).add('daily_limit'))
+                  }
+                }}
+                className="w-28 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-right text-sm font-mono text-white focus:border-cyan-500 focus:outline-none"
+                step={100}
+                min={0}
+                max={50000}
+              />
+            </div>
+          </div>
+
+          {/* Max Single Bet */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400">Max Single Bet</p>
+              <p className="text-[10px] text-gray-600 mt-0.5">Maximum stake on any single bet</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">$</span>
+              <input
+                type="number"
+                value={typeof local['max_single_bet'] === 'number' ? local['max_single_bet'] : 500}
+                onChange={e => {
+                  const v = parseFloat(e.target.value)
+                  if (!isNaN(v) && v >= 0) {
+                    setLocal(prev => ({ ...prev, max_single_bet: v }))
+                    setDirty(prev => new Set(prev).add('max_single_bet'))
+                  }
+                }}
+                className="w-28 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-right text-sm font-mono text-white focus:border-cyan-500 focus:outline-none"
+                step={50}
+                min={0}
+                max={10000}
+              />
+            </div>
+          </div>
+
+          {/* Stop Loss */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400">Daily Stop Loss</p>
+              <p className="text-[10px] text-gray-600 mt-0.5">Stop placing bets if daily losses exceed this amount</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">$</span>
+              <input
+                type="number"
+                value={typeof local['daily_stop_loss'] === 'number' ? local['daily_stop_loss'] : 1000}
+                onChange={e => {
+                  const v = parseFloat(e.target.value)
+                  if (!isNaN(v) && v >= 0) {
+                    setLocal(prev => ({ ...prev, daily_stop_loss: v }))
+                    setDirty(prev => new Set(prev).add('daily_stop_loss'))
+                  }
+                }}
+                className="w-28 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-right text-sm font-mono text-white focus:border-cyan-500 focus:outline-none"
+                step={100}
+                min={0}
+                max={25000}
+              />
+            </div>
           </div>
         </div>
+
+        {tradingMode === 'live' && (
+          <div className="mt-3 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2">
+            <p className="text-[10px] text-amber-400">These limits apply to live Betfair trading. The system will halt if any limit is reached.</p>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
