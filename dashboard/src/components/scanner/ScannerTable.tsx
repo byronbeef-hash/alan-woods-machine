@@ -207,13 +207,13 @@ export function ScannerTable({ results, onPlaceBet, onCancelBet, placingId }: Sc
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => { onCancelBet(result.id); setConfirmCancel(null) }}
-                          className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] text-white hover:bg-red-500"
+                          className="rounded bg-red-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-red-500"
                         >
-                          Confirm
+                          Yes, Cancel
                         </button>
                         <button
                           onClick={() => setConfirmCancel(null)}
-                          className="text-[10px] text-gray-500 hover:text-gray-300"
+                          className="text-[10px] text-gray-400 hover:text-gray-200 px-1"
                         >
                           No
                         </button>
@@ -221,10 +221,9 @@ export function ScannerTable({ results, onPlaceBet, onCancelBet, placingId }: Sc
                     ) : (
                       <button
                         onClick={() => setConfirmCancel(result.id)}
-                        className="text-xs text-gray-600 hover:text-red-400 transition-colors"
-                        title="Cancel this bet"
+                        className="rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-400 hover:bg-red-500/20 transition-colors"
                       >
-                        &times;
+                        Cancel
                       </button>
                     )
                   )}
