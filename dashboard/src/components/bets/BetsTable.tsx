@@ -5,7 +5,7 @@ import { formatCurrency, formatOdds, formatDate, formatEdge, formatPercent, getM
 import { TierBadge, ResultBadge } from '../common/Badge'
 import { BetInfoBubble } from '../common/BetInfoBubble'
 import { LiveBadge } from '../common/LiveBadge'
-import { deleteBet } from '../../lib/queries'
+import { deleteBet, requestMirrorBets } from '../../lib/queries'
 
 interface BetsTableProps {
   bets: Bet[]
@@ -27,6 +27,9 @@ export function BetsTable({ bets }: BetsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('created_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
+  const [liveBetId, setLiveBetId] = useState<number | null>(null)
+  const [liveAmount, setLiveAmount] = useState(100)
+  const [livePlaced, setLivePlaced] = useState<Set<number>>(new Set())
   const queryClient = useQueryClient()
 
   const deleteMutation = useMutation({
@@ -34,6 +37,16 @@ export function BetsTable({ bets }: BetsTableProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bets'] })
       setConfirmDelete(null)
+    },
+  })
+
+  const liveMutation = useMutation({
+    mutationFn: ({ betId, stake }: { betId: number; stake: number }) =>
+      requestMirrorBets([betId], stake),
+    onSuccess: (_data, vars) => {
+      setLivePlaced(prev => new Set(prev).add(vars.betId))
+      setLiveBetId(null)
+      queryClient.invalidateQueries({ queryKey: ['bets'] })
     },
   })
 
@@ -162,7 +175,7 @@ export function BetsTable({ bets }: BetsTableProps) {
                 )}
               </td>
               <td className="px-3 py-2.5">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <a
                     href="https://www.espn.com/nba/scoreboard"
                     target="_blank"
@@ -172,28 +185,65 @@ export function BetsTable({ bets }: BetsTableProps) {
                   >
                     ESPN
                   </a>
+                  {/* Bet Live button — only for pending demo bets */}
+                  {bet.result === 'PENDING' && !bet.notes?.includes('LIVE') && (
+                    liveBetId === bet.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          value={liveAmount}
+                          onChange={e => setLiveAmount(Math.max(1, parseInt(e.target.value) || 0))}
+                          className="w-14 rounded border border-cyan-600 bg-gray-800 px-1 py-0.5 text-[10px] font-mono text-white text-right"
+                          min={1}
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => liveMutation.mutate({ betId: bet.id, stake: liveAmount })}
+                          disabled={liveMutation.isPending}
+                          className="rounded bg-cyan-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-cyan-500 disabled:opacity-50"
+                        >
+                          {liveMutation.isPending ? '...' : `$${liveAmount}`}
+                        </button>
+                        <button
+                          onClick={() => setLiveBetId(null)}
+                          className="text-[10px] text-gray-400 hover:text-gray-200"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ) : livePlaced.has(bet.id) ? (
+                      <span className="text-[10px] text-cyan-400 font-medium">Sent</span>
+                    ) : (
+                      <button
+                        onClick={() => setLiveBetId(bet.id)}
+                        className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                      >
+                        Bet Live
+                      </button>
+                    )
+                  )}
+                  {/* Cancel button */}
                   {confirmDelete === bet.id ? (
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => deleteMutation.mutate(bet.id)}
-                        className="text-[10px] rounded bg-red-600 px-1.5 py-0.5 text-white hover:bg-red-500"
+                        className="rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-red-500"
                       >
-                        Confirm
+                        Yes
                       </button>
                       <button
                         onClick={() => setConfirmDelete(null)}
-                        className="text-[10px] text-gray-500 hover:text-gray-300"
+                        className="text-[10px] text-gray-400 hover:text-gray-200 px-1"
                       >
-                        Cancel
+                        No
                       </button>
                     </div>
                   ) : (
                     <button
                       onClick={() => setConfirmDelete(bet.id)}
-                      className="text-xs text-gray-600 hover:text-red-400 transition-colors"
-                      title="Delete this bet"
+                      className="rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-400 hover:bg-red-500/20 transition-colors"
                     >
-                      &times;
+                      Cancel
                     </button>
                   )}
                 </div>

@@ -1,8 +1,11 @@
+import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Bet } from '../../lib/types'
 import { formatCurrency, formatOdds, formatDateTime, formatPercent, formatEdge, getMarketLabel } from '../../lib/utils'
 import { TierBadge, ResultBadge } from '../common/Badge'
 import { BetInfoBubble } from '../common/BetInfoBubble'
 import { LiveBadge } from '../common/LiveBadge'
+import { deleteBet } from '../../lib/queries'
 
 interface RecentBetsProps {
   bets: Bet[]
@@ -18,6 +21,16 @@ function formatGameDisplay(bet: Bet): string {
 }
 
 export function RecentBets({ bets }: RecentBetsProps) {
+  const [confirmCancel, setConfirmCancel] = useState<number | null>(null)
+  const queryClient = useQueryClient()
+  const cancelMutation = useMutation({
+    mutationFn: deleteBet,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bets'] })
+      setConfirmCancel(null)
+    },
+  })
+
   const recent = [...bets].reverse().slice(0, 10)
 
   if (recent.length === 0) {
@@ -114,15 +127,40 @@ export function RecentBets({ bets }: RecentBetsProps) {
                   )}
                 </td>
                 <td className="px-4 py-2.5">
-                  <a
-                    href="https://www.espn.com/nba/scoreboard"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
-                    title="ESPN Box Score"
-                  >
-                    ESPN
-                  </a>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href="https://www.espn.com/nba/scoreboard"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                      title="ESPN Box Score"
+                    >
+                      ESPN
+                    </a>
+                    {confirmCancel === bet.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => cancelMutation.mutate(bet.id)}
+                          className="rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-red-500"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setConfirmCancel(null)}
+                          className="text-[10px] text-gray-400 hover:text-gray-200 px-1"
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmCancel(bet.id)}
+                        className="rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
