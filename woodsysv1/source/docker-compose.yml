@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  woods:
+    build: .
+    container_name: woods-system
+    restart: unless-stopped
+    environment:
+      # Mode: "demo" for paper trading, "live" for real money
+      - WOODS_MODE=demo
+      # Schedule (ET timezone)
+      - WOODS_SCAN_TIME=17:00
+      - WOODS_RESULTS_TIME=23:30
+      - WOODS_LOG_LEVEL=INFO
+      - TZ=America/New_York
+      # API Keys (set these before deploying)
+      - ODDS_API_KEY=${ODDS_API_KEY:-YOUR_API_KEY_HERE}
+      # Supabase (persistent cloud storage)
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_KEY=${SUPABASE_KEY:-}
+      # Telegram notifications (optional)
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      # Email notifications (optional)
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - NOTIFY_EMAIL=${NOTIFY_EMAIL:-}
+      # Betfair (only for live mode)
+      - BETFAIR_USERNAME=${BETFAIR_USERNAME:-}
+      - BETFAIR_PASSWORD=${BETFAIR_PASSWORD:-}
+      - BETFAIR_APP_KEY=${BETFAIR_APP_KEY:-}
+    volumes:
+      # Persist bet logs and performance data
+      - woods-data:/app/woods_system/data
+
+volumes:
+  woods-data:

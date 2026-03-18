@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { PageShell } from './components/layout/PageShell'
 import { DashboardPage } from './pages/DashboardPage'
-import { ScannerPage } from './pages/ScannerPage'
 import { BetsPage } from './pages/BetsPage'
 import { MarketsPage } from './pages/MarketsPage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -23,7 +22,6 @@ export default function App() {
         <Routes>
           <Route element={<PageShell />}>
             <Route path="/" element={<DashboardPage />} />
-            <Route path="/scanner" element={<ScannerPage />} />
             <Route path="/bets" element={<BetsPage />} />
             <Route path="/markets" element={<MarketsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
@@ -33,4 +31,3 @@ export default function App() {
     </QueryClientProvider>
   )
 }
-// force deploy 1773795153
