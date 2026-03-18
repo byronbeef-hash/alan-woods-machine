@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import clsx from 'clsx'
+import { useAuth } from '../../lib/auth'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '~' },
@@ -16,6 +17,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
+  const { signOut, user } = useAuth()
+
   return (
     <>
       {/* Overlay for mobile */}
@@ -33,7 +36,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           open ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-1 flex-col gap-1">
           {navItems.map(item => (
             <NavLink
               key={item.to}
@@ -52,6 +55,18 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               {item.label}
             </NavLink>
           ))}
+        </div>
+
+        {/* Sign out */}
+        <div className="mt-auto border-t border-gray-800 pt-3">
+          <p className="truncate px-3 text-[10px] text-gray-600 mb-2">{user?.email}</p>
+          <button
+            onClick={signOut}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-800/50 hover:text-red-400"
+          >
+            <span className="w-4 text-center font-mono text-xs">{'>'}</span>
+            Sign Out
+          </button>
         </div>
       </nav>
     </>

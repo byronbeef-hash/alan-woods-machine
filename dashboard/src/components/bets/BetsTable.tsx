@@ -175,7 +175,7 @@ export function BetsTable({ bets }: BetsTableProps) {
                 )}
               </td>
               <td className="px-3 py-2.5">
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="relative flex items-center gap-2 whitespace-nowrap">
                   <a
                     href="https://www.espn.com/nba/scoreboard"
                     target="_blank"
@@ -187,42 +187,70 @@ export function BetsTable({ bets }: BetsTableProps) {
                   </a>
                   {/* Bet Live button — only for pending demo bets */}
                   {bet.result === 'PENDING' && !bet.notes?.includes('LIVE') && (
-                    liveBetId === bet.id ? (
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          value={liveAmount}
-                          onChange={e => setLiveAmount(Math.max(1, parseInt(e.target.value) || 0))}
-                          className="w-14 rounded border border-cyan-600 bg-gray-800 px-1 py-0.5 text-[10px] font-mono text-white text-right"
-                          min={1}
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => liveMutation.mutate({ betId: bet.id, stake: liveAmount })}
-                          disabled={liveMutation.isPending}
-                          className="rounded bg-cyan-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-cyan-500 disabled:opacity-50"
-                        >
-                          {liveMutation.isPending ? '...' : `$${liveAmount}`}
-                        </button>
-                        <button
-                          onClick={() => setLiveBetId(null)}
-                          className="text-[10px] text-gray-400 hover:text-gray-200"
-                        >
-                          &times;
-                        </button>
-                      </div>
-                    ) : livePlaced.has(bet.id) ? (
+                    livePlaced.has(bet.id) ? (
                       <span className="text-[10px] text-cyan-400 font-medium">Sent</span>
                     ) : (
-                      <button
-                        onClick={() => setLiveBetId(bet.id)}
-                        className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-                      >
-                        Bet Live
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setLiveBetId(liveBetId === bet.id ? null : bet.id)}
+                          className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                        >
+                          Bet Live
+                        </button>
+                        {/* Bubble popup */}
+                        {liveBetId === bet.id && (
+                          <div className="absolute right-0 top-8 z-50 w-56 rounded-xl border border-cyan-500/30 bg-gray-900 p-4 shadow-xl shadow-black/40">
+                            <div className="mb-3">
+                              <p className="text-xs font-semibold text-white mb-0.5">Mirror to Betfair</p>
+                              <p className="text-[10px] text-gray-500">{bet.player} {bet.side} {bet.line} {bet.market?.replace('player_', '')}</p>
+                            </div>
+                            <div className="mb-3">
+                              <label className="text-[10px] text-gray-400 mb-1 block">Stake (AUD)</label>
+                              <div className="flex gap-1.5 mb-2">
+                                {[25, 50, 100, 200].map(amt => (
+                                  <button
+                                    key={amt}
+                                    onClick={() => setLiveAmount(amt)}
+                                    className={`flex-1 rounded py-1 text-[10px] font-mono transition-colors ${
+                                      liveAmount === amt
+                                        ? 'bg-cyan-600 text-white'
+                                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                                    }`}
+                                  >
+                                    ${amt}
+                                  </button>
+                                ))}
+                              </div>
+                              <input
+                                type="number"
+                                value={liveAmount}
+                                onChange={e => setLiveAmount(Math.max(1, parseInt(e.target.value) || 0))}
+                                className="w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm font-mono text-white text-right focus:border-cyan-500 focus:outline-none"
+                                min={1}
+                                autoFocus
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => liveMutation.mutate({ betId: bet.id, stake: liveAmount })}
+                                disabled={liveMutation.isPending}
+                                className="flex-1 rounded-lg bg-cyan-600 py-1.5 text-xs font-semibold text-white hover:bg-cyan-500 disabled:opacity-50 transition-colors"
+                              >
+                                {liveMutation.isPending ? 'Placing...' : `Place $${liveAmount} Live`}
+                              </button>
+                              <button
+                                onClick={() => setLiveBetId(null)}
+                                className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:border-gray-600 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )
                   )}
-                  {/* Cancel button */}
+                  {/* Cancel/delete button */}
                   {confirmDelete === bet.id ? (
                     <div className="flex items-center gap-1">
                       <button
