@@ -50,7 +50,7 @@ class Database:
                 print("  [Supabase] Not configured. Set SUPABASE_URL and SUPABASE_KEY.")
 
     def record_bet(self, bet: dict, bankroll: float) -> dict:
-        """Insert a new bet record."""
+        """Insert a new bet record. Skips if an identical pending bet already exists."""
         record = {
             "player": bet["player"],
             "market": bet["market"],
@@ -79,6 +79,23 @@ class Database:
 
         if not self.enabled:
             return record
+
+        # Check for existing duplicate bet (same player+market+side+line+game)
+        try:
+            existing = self.client.table("bets").select("id").eq(
+                "player", bet["player"]
+            ).eq("market", bet["market"]).eq(
+                "side", bet["side"]
+            ).eq("line", bet["line"]).eq(
+                "home_team", bet.get("home_team", "")
+            ).eq("result", "PENDING").limit(1).execute()
+
+            if existing.data:
+                print(f"  [Supabase] Skipping duplicate bet: {bet['player']} {bet['side']} {bet['line']} {bet['market']}")
+                record["id"] = existing.data[0]["id"]
+                return record
+        except Exception as e:
+            print(f"  [Supabase] Warning checking for dupe: {e}")
 
         try:
             result = self.client.table("bets").insert(record).execute()
