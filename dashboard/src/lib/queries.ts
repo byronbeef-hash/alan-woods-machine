@@ -96,6 +96,16 @@ export async function updateSystemConfig(key: string, value: unknown): Promise<v
   if (error) throw error
 }
 
+// Delete a bet
+export async function deleteBet(betId: number): Promise<void> {
+  const { error } = await supabase
+    .from('bets')
+    .delete()
+    .eq('id', betId)
+
+  if (error) throw error
+}
+
 // Mirror bets to live
 export async function requestMirrorBets(betIds: number[], liveStake: number): Promise<void> {
   const { error } = await supabase

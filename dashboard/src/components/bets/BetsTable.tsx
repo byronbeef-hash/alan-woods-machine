@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Bet } from '../../lib/types'
 import { formatCurrency, formatOdds, formatDate, formatEdge, formatPercent, getMarketLabel } from '../../lib/utils'
 import { TierBadge, ResultBadge, DemoBadge } from '../common/Badge'
 import { BetInfoBubble } from '../common/BetInfoBubble'
 import { LiveBadge } from '../common/LiveBadge'
+import { deleteBet } from '../../lib/queries'
 
 interface BetsTableProps {
   bets: Bet[]
@@ -24,6 +26,16 @@ function formatGameDisplay(bet: Bet): string {
 export function BetsTable({ bets }: BetsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('created_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
+  const queryClient = useQueryClient()
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteBet,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bets'] })
+      setConfirmDelete(null)
+    },
+  })
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -150,15 +162,41 @@ export function BetsTable({ bets }: BetsTableProps) {
                 )}
               </td>
               <td className="px-3 py-2.5">
-                <a
-                  href="https://www.espn.com/nba/scoreboard"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
-                  title="ESPN Box Score"
-                >
-                  ESPN
-                </a>
+                <div className="flex items-center gap-2">
+                  <a
+                    href="https://www.espn.com/nba/scoreboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                    title="ESPN Box Score"
+                  >
+                    ESPN
+                  </a>
+                  {confirmDelete === bet.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => deleteMutation.mutate(bet.id)}
+                        className="text-[10px] rounded bg-red-600 px-1.5 py-0.5 text-white hover:bg-red-500"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(null)}
+                        className="text-[10px] text-gray-500 hover:text-gray-300"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(bet.id)}
+                      className="text-xs text-gray-600 hover:text-red-400 transition-colors"
+                      title="Delete this bet"
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
