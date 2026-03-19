@@ -43,7 +43,7 @@ const SPORT_MODE_TO_KEY: Record<string, string> = {
   nba: 'basketball_nba',
   afl: 'aussierules_afl',
   soccer: 'soccer_epl',
-  racing: '',
+  racing: 'racing',
 }
 
 async function fetchTopOverlays(sportKey: string): Promise<TopOverlay[]> {
