@@ -524,7 +524,7 @@ class HorseRacingModel:
                         f"  |  Model {o['model_prob']:.1%} vs Market {o['market_prob']:.1%}"
                         f"  |  W.E.(net) = {o['we_net']:.3f}"
                         f"  |  Form: {o['form'] or '?':>8}"
-                        f"  |  B{o['barrier']} J:{o['jockey'][:15]}"
+                        f"  |  B{o['barrier']} J:{(o['jockey'] or '')[:15]}"
                     )
             all_results.extend(results)
 
