@@ -22,14 +22,14 @@ from scipy import stats as scipy_stats
 # ---------------------------------------------------------------------------
 
 HAWTHORN_PLAYERS = {
-    "Jack Gunston":       {"g25": 73, "gp25": 25, "g26": 9, "gp26": 2},
-    "Nick Watson":        {"g25": 36, "gp25": 23, "g26": 6, "gp26": 2},
-    "Mabior Chol":        {"g25": 42, "gp25": 24, "g26": 3, "gp26": 2},
-    "Jack Ginnivan":      {"g25": 29, "gp25": 24, "g26": 3, "gp26": 2},
-    "Dylan Moore":        {"g25": 23, "gp25": 25, "g26": 1, "gp26": 2},
-    "Connor MacDonald":   {"g25": 22, "gp25": 25, "g26": 2, "gp26": 2},
-    "Mitch Lewis":        {"g25":  8, "gp25":  6, "g26": 1, "gp26": 2},
-    "Sam Butler":         {"g25":  3, "gp25":  4, "g26": 2, "gp26": 2},
+    "Jack Gunston":       {"g25": 73, "gp25": 25, "g26": 9, "gp26": 2, "g24": 44, "gp24": 20, "g23": 32, "gp23": 19, "role": "key_forward"},
+    "Nick Watson":        {"g25": 36, "gp25": 23, "g26": 6, "gp26": 2, "g24": 15, "gp24": 12, "role": "small_forward"},
+    "Mabior Chol":        {"g25": 42, "gp25": 24, "g26": 3, "gp26": 2, "g24": 28, "gp24": 20, "role": "key_forward"},
+    "Jack Ginnivan":      {"g25": 29, "gp25": 24, "g26": 3, "gp26": 2, "g24": 18, "gp24": 16, "role": "small_forward"},
+    "Dylan Moore":        {"g25": 23, "gp25": 25, "g26": 1, "gp26": 2, "g24": 30, "gp24": 22, "role": "midfielder"},
+    "Connor MacDonald":   {"g25": 22, "gp25": 25, "g26": 2, "gp26": 2, "g24": 14, "gp24": 18, "role": "midfielder"},
+    "Mitch Lewis":        {"g25":  8, "gp25":  6, "g26": 1, "gp26": 2, "g24": 35, "gp24": 16, "role": "key_forward"},
+    "Sam Butler":         {"g25":  3, "gp25":  4, "g26": 2, "gp26": 2, "role": "small_forward"},
     "Jai Newcombe":       {"g25": 11, "gp25": 25, "g26": 1, "gp26": 2},
     "Calsher Dear":       {"g25": 10, "gp25": 25, "g26": 0, "gp26": 0},
     "Ned Reeves":         {"g25":  0, "gp25": 20, "g26": 2, "gp26": 2},
@@ -40,11 +40,11 @@ HAWTHORN_PLAYERS = {
 }
 
 SYDNEY_PLAYERS = {
-    "Joel Amartey":       {"g25": 13, "gp25": 16, "g26": 8, "gp26": 2},
-    "Charlie Curnow":     {"g25":  0, "gp25":  0, "g26": 3, "gp26": 2},  # Traded to Sydney 2026
-    "Isaac Heeney":       {"g25": 37, "gp25": 23, "g26": 4, "gp26": 2},
-    "Tom Papley":         {"g25": 10, "gp25": 11, "g26": 1, "gp26": 2},
-    "Logan McDonald":     {"g25":  0, "gp25":  0, "g26": 3, "gp26": 2},
+    "Joel Amartey":       {"g25": 13, "gp25": 16, "g26": 8, "gp26": 2, "g24": 22, "gp24": 15, "role": "key_forward"},
+    "Charlie Curnow":     {"g25": 62, "gp25": 22, "g26": 3, "gp26": 2, "g24": 40, "gp24": 17, "g23": 67, "gp23": 23, "role": "key_forward", "note": "Coleman Medal 2022-23, traded from Carlton 2026"},  # 2.8 gpg career forward
+    "Isaac Heeney":       {"g25": 37, "gp25": 23, "g26": 4, "gp26": 2, "g24": 35, "gp24": 22, "role": "forward_mid"},
+    "Tom Papley":         {"g25": 10, "gp25": 11, "g26": 1, "gp26": 2, "g24": 30, "gp24": 20, "g23": 42, "gp23": 24, "role": "small_forward"},
+    "Logan McDonald":     {"g25":  0, "gp25":  0, "g26": 3, "gp26": 2, "g24": 20, "gp24": 15, "role": "key_forward"},
     "Justin McInerney":   {"g25":  8, "gp25": 18, "g26": 5, "gp26": 2},
     "Errol Gulden":       {"g25":  6, "gp25": 10, "g26": 1, "gp26": 2},
     "Chad Warner":        {"g25": 20, "gp25": 23, "g26": 1, "gp26": 2},
@@ -63,26 +63,87 @@ SYDNEY_PLAYERS = {
 
 def estimate_goals_per_game(player_data: dict) -> float:
     """
-    Estimate a player's expected goals per game using weighted average.
-    2026 data weighted 2x (recent form) vs 2025 data weighted 1x (larger sample).
+    Estimate a player's expected goals per game using weighted average
+    across 3 seasons: 2026 (3x weight), 2025 (2x weight), 2024 (1x weight).
+    More recent data weighted heavier but older data prevents sample-size errors.
     """
-    g25 = player_data["g25"]
-    gp25 = player_data["gp25"]
-    g26 = player_data["g26"]
-    gp26 = player_data["gp26"]
+    seasons = [
+        (player_data.get("g26", 0), player_data.get("gp26", 0), 3),  # Current form (3x)
+        (player_data.get("g25", 0), player_data.get("gp25", 0), 2),  # Last season (2x)
+        (player_data.get("g24", 0), player_data.get("gp24", 0), 1),  # 2 seasons ago (1x)
+        (player_data.get("g23", 0), player_data.get("gp23", 0), 0.5),  # 3 seasons ago (0.5x)
+    ]
 
-    if gp26 > 0 and gp25 > 0:
-        avg_25 = g25 / gp25
-        avg_26 = g26 / gp26
-        # Weight 2026 at 2x because it's current form
-        weighted = (avg_25 * gp25 + avg_26 * gp26 * 2) / (gp25 + gp26 * 2)
-        return weighted
-    elif gp26 > 0:
-        return g26 / gp26
-    elif gp25 > 0:
-        return g25 / gp25
-    else:
-        return 0.5  # Unknown player fallback
+    total_weighted_goals = 0
+    total_weighted_games = 0
+    for goals, games, weight in seasons:
+        if games > 0:
+            total_weighted_goals += goals * weight
+            total_weighted_games += games * weight
+
+    if total_weighted_games > 0:
+        return total_weighted_goals / total_weighted_games
+    return 0.5  # Unknown player fallback
+
+
+def get_player_history(player_data: dict, player_name: str) -> dict:
+    """
+    Get full career history breakdown for a player.
+    Used for the click-through detail view.
+    """
+    history = {
+        "player": player_name,
+        "role": player_data.get("role", "unknown"),
+        "note": player_data.get("note", ""),
+        "seasons": [],
+        "career_gpg": 0,
+        "career_goals": 0,
+        "career_games": 0,
+    }
+
+    season_labels = [
+        ("2026", "g26", "gp26"),
+        ("2025", "g25", "gp25"),
+        ("2024", "g24", "gp24"),
+        ("2023", "g23", "gp23"),
+    ]
+
+    total_goals = 0
+    total_games = 0
+    for label, g_key, gp_key in season_labels:
+        goals = player_data.get(g_key, 0)
+        games = player_data.get(gp_key, 0)
+        if games > 0:
+            gpg = goals / games
+            history["seasons"].append({
+                "year": label,
+                "goals": goals,
+                "games": games,
+                "gpg": round(gpg, 2),
+            })
+            total_goals += goals
+            total_games += games
+
+    history["career_goals"] = total_goals
+    history["career_games"] = total_games
+    history["career_gpg"] = round(total_goals / total_games, 2) if total_games > 0 else 0
+
+    # Calculate rolling averages
+    if total_games > 0:
+        # Last 12 months (2026 + partial 2025)
+        g12 = player_data.get("g26", 0) + player_data.get("g25", 0)
+        gp12 = player_data.get("gp26", 0) + player_data.get("gp25", 0)
+        history["avg_12m"] = round(g12 / gp12, 2) if gp12 > 0 else 0
+
+        # Last 24 months (2026 + 2025 + 2024)
+        g24 = g12 + player_data.get("g24", 0)
+        gp24 = gp12 + player_data.get("gp24", 0)
+        history["avg_24m"] = round(g24 / gp24, 2) if gp24 > 0 else 0
+
+        # Last 36 months (all data)
+        history["avg_36m"] = history["career_gpg"]
+
+    return history
 
 
 def prob_over_goals(expected_gpg: float, line: float) -> float:
@@ -232,9 +293,15 @@ def scan_betfair_overlays():
             if model_prob is None or model_prob <= 0:
                 continue
 
-            # Filter: don't bet Under on premium forwards (Tim's instruction)
-            if player_model and "Under" in runner_name and player_model["goals_per_game"] >= 1.0:
-                continue
+            # STRICT FILTER: Never bet Under on key forwards or anyone averaging 1+ gpg
+            # This prevents the Curnow mistake (Under 1.5 on a Coleman Medal forward)
+            if player_model and "Under" in runner_name:
+                role = all_players.get(runner_name.lower(), {})
+                player_role = player_data.get("role", "") if isinstance(player_data, dict) else ""
+                gpg = player_model["goals_per_game"]
+                # Skip Under for: key forwards, anyone averaging 1+ gpg, anyone with role containing 'forward'
+                if gpg >= 0.8 or "forward" in player_role:
+                    continue
 
             # Win Expectation = model probability × back odds
             we = round(model_prob * back_price, 3)
