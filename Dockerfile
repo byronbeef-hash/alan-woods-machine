@@ -14,16 +14,9 @@ RUN mkdir -p /app/woods_system/data
 
 WORKDIR /app/woods_system
 
-# Environment variables (override at deploy time)
+# Environment variables (override at deploy time via Railway)
 ENV WOODS_MODE=demo
-ENV WOODS_SCAN_TIME=17:00
-ENV WOODS_RESULTS_TIME=23:30
-ENV WOODS_LOG_LEVEL=INFO
-ENV TZ=America/New_York
-
-# Health check
-HEALTHCHECK --interval=60s --timeout=10s --retries=3 \
-    CMD python -c "import main; print('OK')" || exit 1
+ENV TZ=Australia/Sydney
 
 # Default: run the scheduler
 CMD ["python", "runner.py", "schedule"]
