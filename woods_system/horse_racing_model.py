@@ -421,29 +421,43 @@ class HorseRacingModel:
 
         return results
 
-    def scan_meeting(self, event_id: str, event_name: str = '') -> list[dict]:
-        """Scan all races at a meeting."""
+    def scan_meeting(self, event_id: str, event_name: str = '',
+                     include_place: bool = True) -> list[dict]:
+        """Scan all races at a meeting (win + place markets)."""
         if not self._ensure_login():
             return []
+
+        # Fetch both WIN and PLACE markets
+        market_types = ['WIN']
+        if include_place:
+            market_types.append('PLACE')
 
         markets = self.bf._betting_call('listMarketCatalogue', {
             'filter': {
                 'eventIds': [event_id],
-                'marketTypeCodes': ['WIN'],
+                'marketTypeCodes': market_types,
             },
-            'maxResults': '15',
+            'maxResults': '30',
             'marketProjection': ['RUNNER_METADATA', 'RUNNER_DESCRIPTION', 'MARKET_START_TIME'],
             'sort': 'FIRST_TO_START',
         })
 
-        print(f"\n  {event_name or event_id}: {len(markets)} races")
+        win_markets = [m for m in markets if m.get('description', {}).get('marketType') == 'WIN'
+                       or 'To Be Placed' not in m.get('marketName', '')]
+        place_markets = [m for m in markets if 'To Be Placed' in m.get('marketName', '')]
+
+        print(f"\n  {event_name or event_id}: {len(win_markets)} win + {len(place_markets)} place races")
 
         all_results = []
-        for m in markets:
+
+        # Scan WIN markets
+        for m in win_markets:
             results = self.scan_race(m)
+            for r in results:
+                r['bet_type'] = 'WIN'
             overlays = [r for r in results if r['verdict'] == 'OVERLAY']
             if overlays:
-                print(f"    {m['marketName']}: {len(overlays)} overlay(s)")
+                print(f"    {m['marketName']} (WIN): {len(overlays)} overlay(s)")
                 for o in overlays:
                     print(
                         f"      [{o['tier']:8s}] {o['name']:25s}"
@@ -452,6 +466,22 @@ class HorseRacingModel:
                         f"  |  W.E.(net) = {o['we_net']:.3f}"
                         f"  |  Form: {o['form'] or '?':>8}"
                         f"  |  B{o['barrier']} J:{o['jockey'][:15]}"
+                    )
+            all_results.extend(results)
+
+        # Scan PLACE markets (often less efficient = more overlays)
+        for m in place_markets:
+            results = self.scan_race(m)
+            for r in results:
+                r['bet_type'] = 'PLACE'
+            overlays = [r for r in results if r['verdict'] == 'OVERLAY']
+            if overlays:
+                print(f"    {m['marketName']} (PLACE): {len(overlays)} overlay(s)")
+                for o in overlays[:3]:  # Show top 3 only
+                    print(
+                        f"      [{o['tier']:8s}] {o['name']:25s}"
+                        f"  Back {o['back_price']:>6.2f} (${o['back_size']:>5.0f})"
+                        f"  |  W.E.(net) = {o['we_net']:.3f}"
                     )
             all_results.extend(results)
 
@@ -553,37 +583,115 @@ def print_report(results: list[dict]):
 # Autonomous betting
 # ======================================================================
 
-def auto_bet(results: list[dict], max_bets: int = 5, stake: float = 20.0,
-             min_we: float = MIN_WE_OVERLAY, dry_run: bool = True) -> list[dict]:
+def kelly_stake(we_net: float, bankroll: float, back_price: float,
+                available_liquidity: float, max_fraction: float = 0.25,
+                max_bet: float = 500.0) -> float:
     """
-    Automatically place bets on the top overlays.
+    Kelly Criterion bet sizing with liquidity constraint.
+
+    Full Kelly: f = (b*p - q) / b
+    We use fractional Kelly (25% by default) for safety.
+
+    Constraints:
+    - Never bet more than 10% of available liquidity
+    - Never bet more than max_bet
+    - Never bet more than max_fraction of bankroll
+    """
+    if we_net <= 1.0:
+        return 0.0
+
+    # Derive model prob from W.E. and net price
+    net_price = (back_price - 1) * (1 - BETFAIR_COMMISSION) + 1
+    model_prob = we_net / net_price
+    b = net_price - 1  # Net payout per dollar
+    p = model_prob
+    q = 1 - p
+
+    if b <= 0:
+        return 0.0
+
+    full_kelly = (b * p - q) / b
+    if full_kelly <= 0:
+        return 0.0
+
+    fractional_kelly = full_kelly * max_fraction
+    kelly_bet = bankroll * fractional_kelly
+
+    # Apply constraints
+    bet = min(
+        kelly_bet,
+        available_liquidity * 0.10,   # Max 10% of market liquidity
+        max_bet,                       # Absolute max
+        bankroll * 0.05,              # Max 5% of bankroll per bet
+    )
+
+    return max(round(bet, 2), 0)
+
+
+def auto_bet(results: list[dict], max_bets: int = 10, bankroll: float = 2500.0,
+             min_we: float = MIN_WE_OVERLAY, dry_run: bool = True,
+             max_bet: float = 200.0) -> list[dict]:
+    """
+    Automatically place bets on overlays using Kelly Criterion sizing.
+
+    Like Alan's system: bet every overlay, size according to edge,
+    constrained by available liquidity.
 
     Args:
         results: Model results from scan_all_meetings()
-        max_bets: Maximum bets to place
-        stake: Bet size in AUD
+        max_bets: Maximum bets to place per session
+        bankroll: Current bankroll in AUD
         min_we: Minimum net W.E. to bet
         dry_run: If True, log but don't actually place
+        max_bet: Maximum single bet size
 
     Returns:
         List of placed bet records
     """
     overlays = [r for r in results
                 if r['we_net'] >= min_we
-                and r['back_size'] >= stake * 2  # Need 2x stake in liquidity
-                and r['back_price'] >= 2.0  # Avoid very short prices
-                and r['back_price'] <= 30.0]  # Avoid crazy longshots
+                and r['back_size'] >= 30  # Minimum liquidity
+                and r['back_price'] >= 1.50  # Avoid unbackable favs
+                and r['back_price'] <= 50.0]  # Avoid crazy longshots
+
+    # Sort by W.E. descending (best overlays first)
+    overlays.sort(key=lambda x: x['we_net'], reverse=True)
 
     bets_placed = []
+    total_staked = 0
+    daily_limit = bankroll * 0.20  # Max 20% of bankroll per day
     model = HorseRacingModel()
 
     for o in overlays[:max_bets]:
+        if total_staked >= daily_limit:
+            print(f"  Daily limit reached (${daily_limit:.0f})")
+            break
+
+        stake = kelly_stake(
+            we_net=o['we_net'],
+            bankroll=bankroll,
+            back_price=o['back_price'],
+            available_liquidity=o['back_size'],
+            max_bet=max_bet,
+        )
+
+        if stake < 5:  # Minimum $5 bet
+            continue
+
+        # Don't exceed daily limit
+        stake = min(stake, daily_limit - total_staked)
+
         print(
-            f"\n  {'[DRY RUN] ' if dry_run else ''}Betting ${stake:.0f} on {o['name']}"
+            f"\n  {'[DRY RUN] ' if dry_run else '💰 '}${stake:.0f} on {o['name']}"
             f"  @ {o['back_price']:.2f}"
             f"  |  W.E.(net) = {o['we_net']:.3f}"
+            f"  |  Edge: {o['edge']:+.1%}"
+            f"  |  Kelly: ${stake:.0f}"
             f"  |  {o['race']}"
         )
+
+        o['stake'] = stake
+        total_staked += stake
 
         if not dry_run:
             result = model.place_bet(
@@ -594,6 +702,9 @@ def auto_bet(results: list[dict], max_bets: int = 5, stake: float = 20.0,
             print(f"    Betfair response: {result}")
 
         bets_placed.append(o)
+
+    print(f"\n  Total: {len(bets_placed)} bets | ${total_staked:.0f} staked"
+          f" | Avg W.E.: {sum(b['we_net'] for b in bets_placed)/max(len(bets_placed),1):.3f}")
 
     return bets_placed
 
