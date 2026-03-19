@@ -152,8 +152,13 @@ async function triggerOverlayScan(sport: string): Promise<void> {
 type SortKey = 'edge_pct' | 'we' | 'best_odds' | 'implied_prob'
 
 function calcWE(o: GameOverlay): number {
-  if (!o.betfair_back || !o.betfair_lay || o.betfair_lay <= 1) return 0
-  return (1 / o.betfair_lay) * o.betfair_back
+  // W.E. = P(win) × odds
+  // Use implied_prob (model probability stored as %) and betfair_back
+  if (!o.betfair_back || !o.implied_prob) return 0
+  const modelProb = o.implied_prob / 100
+  // Net of 5% Betfair commission
+  const netOdds = (o.betfair_back - 1) * 0.95 + 1
+  return modelProb * netOdds
 }
 
 export function OverlaysPage() {
@@ -203,8 +208,7 @@ export function OverlaysPage() {
   const sportsScanned = new Set(overlays.map(o => o.sport_label)).size
   // Best Win Expectation (highest W.E. > 1.0 = best overlay)
   const bestWE = overlays.reduce((best, o) => {
-    if (!o.betfair_back || !o.betfair_lay || o.betfair_lay <= 1) return best
-    const we = (1 / o.betfair_lay) * o.betfair_back
+    const we = calcWE(o)
     return we > best ? we : best
   }, 0)
 

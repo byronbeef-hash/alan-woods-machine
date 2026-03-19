@@ -69,35 +69,55 @@ function formatTime(iso: string) {
   } catch { return iso.slice(0, 16) }
 }
 
-// Hardcoded live bets until we build proper tracking
-const LIVE_BETS: LiveBet[] = [
-  {
-    player: 'Jack Gunston',
-    market: 'Goals - Jack Gunston',
-    selection: 'Over 1.5 Goals',
-    odds: 1.28,
-    stake: 100,
-    matched: 100,
-    unmatched: 0,
-    potential_profit: 26.60,
-    game: 'Hawthorn v Sydney Swans',
-    bet_id: '422437009637 / 422437182350',
-    status: 'MATCHED',
-  },
-  {
-    player: 'Mabior Chol',
-    market: 'Goals - Mabior Chol',
-    selection: 'Over 1.5 Goals',
-    odds: 2.06,
-    stake: 100,
-    matched: 19.79,
-    unmatched: 80.21,
-    potential_profit: 100.70,
-    game: 'Hawthorn v Sydney Swans',
-    bet_id: '422437183925',
-    status: 'PARTIAL',
-  },
-]
+async function fetchLiveBets(): Promise<LiveBet[]> {
+  const { data, error } = await supabase
+    .from('system_config')
+    .select('value')
+    .eq('key', 'live_betfair_bets')
+    .single()
+  if (error || !data?.value) return []
+  const orders = data.value as Array<{bet_id: string; side: string; price: number; size: number; matched: number; remaining: number; status: string; placed: string}>
+
+  // Group by market (Gunston has 2 bet IDs)
+  const gunston = orders.filter(o => o.bet_id === '422437009637' || o.bet_id === '422437182350')
+  const chol = orders.filter(o => o.bet_id === '422437183925')
+
+  const bets: LiveBet[] = []
+  if (gunston.length > 0) {
+    const totalMatched = gunston.reduce((s, o) => s + (o.matched || 0), 0)
+    const totalRemaining = gunston.reduce((s, o) => s + (o.remaining || 0), 0)
+    bets.push({
+      player: 'Jack Gunston',
+      market: 'Goals - Jack Gunston',
+      selection: 'Over 1.5 Goals',
+      odds: 1.28,
+      stake: 100,
+      matched: totalMatched,
+      unmatched: totalRemaining,
+      potential_profit: totalMatched * (1.28 - 1) * 0.95,
+      game: 'Hawthorn v Sydney Swans',
+      bet_id: gunston.map(o => o.bet_id).join(' / '),
+      status: totalRemaining === 0 ? 'MATCHED' : 'PARTIAL',
+    })
+  }
+  if (chol.length > 0) {
+    const o = chol[0]
+    bets.push({
+      player: 'Mabior Chol',
+      market: 'Goals - Mabior Chol',
+      selection: 'Over 1.5 Goals',
+      odds: 2.06,
+      stake: 100,
+      matched: o.matched || 0,
+      unmatched: o.remaining || 0,
+      potential_profit: (o.matched || 0) * (2.06 - 1) * 0.95,
+      game: 'Hawthorn v Sydney Swans',
+      bet_id: o.bet_id,
+      status: (o.remaining || 0) === 0 ? 'MATCHED' : 'PARTIAL',
+    })
+  }
+  return bets
+}
 
 export function DashboardPage() {
   const { data: bets, isLoading, error } = useAllBets()
@@ -115,6 +135,12 @@ export function DashboardPage() {
     refetchInterval: 60000,
   })
 
+  const { data: liveBetsData } = useQuery({
+    queryKey: ['live_betfair_bets'],
+    queryFn: fetchLiveBets,
+    refetchInterval: 60000, // Check every 60 seconds
+  })
+
   if (isLoading) return <LoadingSpinner />
   if (error) return <div className="text-red-400">Error loading data: {error.message}</div>
 
@@ -125,6 +151,7 @@ export function DashboardPage() {
   const isDemo = !config || (config['woods_mode'] as string) !== 'live'
 
   const overlays = topOverlays || []
+  const LIVE_BETS = liveBetsData || []
 
   return (
     <div className="space-y-6">
