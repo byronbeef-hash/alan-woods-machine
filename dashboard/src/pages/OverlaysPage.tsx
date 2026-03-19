@@ -167,6 +167,7 @@ export function OverlaysPage() {
   const [scanMessage, setScanMessage] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('we')
   const [sortAsc, setSortAsc] = useState(false)
+  const [queuedIds, setQueuedIds] = useState<Set<number>>(new Set())
 
   const {
     data: overlays = [],
@@ -279,7 +280,7 @@ export function OverlaysPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatCard label="Total Overlays" value={String(overlays.length)} color="text-cyan-400" />
           <StatCard label="Strong" value={String(strongCount)} color="text-emerald-400" />
-          <StatCard label="Best W.E." value={bestWE.toFixed(3)} color={bestWE > 1.0 ? 'text-emerald-400' : 'text-amber-400'} />
+          <StatCard label="Best W.E." value={bestWE.toFixed(3)} color={bestWE > 1.05 ? 'text-emerald-400' : bestWE >= 0.92 ? 'text-amber-400' : 'text-red-400'} />
           <StatCard label="Sports Scanned" value={String(sportsScanned)} color="text-purple-400" />
         </div>
       )}
@@ -401,7 +402,7 @@ export function OverlaysPage() {
                         if (!o.betfair_back || !o.betfair_lay || o.betfair_lay <= 1) return <span className="text-gray-600">&mdash;</span>
                         const trueProb = 1 / o.betfair_lay
                         const we = trueProb * o.betfair_back
-                        const color = we > 1.0 ? 'text-emerald-400' : we >= 0.82 ? 'text-amber-400' : 'text-red-400'
+                        const color = we > 1.05 ? 'text-emerald-400' : we >= 0.92 ? 'text-amber-400' : 'text-red-400'
                         return <span className={color}>{we.toFixed(3)}</span>
                       })()}
                     </td>
@@ -436,11 +437,19 @@ export function OverlaysPage() {
                       {o.betfair_back !== null && (
                         <button
                           onClick={() => {
-                            placeBetfairRequest(o).then(() => alert(`Bet queued: ${o.selection} @ ${o.betfair_back}`)).catch(err => alert(`Error: ${err.message}`))
+                            placeBetfairRequest(o).then(() => {
+                              setQueuedIds(prev => new Set(prev).add(o.id))
+                              setTimeout(() => setQueuedIds(prev => { const next = new Set(prev); next.delete(o.id); return next }), 3000)
+                            }).catch(err => alert(`Error: ${err.message}`))
                           }}
-                          className="rounded-lg border border-blue-700 bg-blue-900/30 px-3 py-1 text-xs font-medium text-blue-400 hover:bg-blue-800/40 transition-colors"
+                          disabled={queuedIds.has(o.id)}
+                          className={`rounded-lg border px-3 py-1 text-xs font-medium transition-colors ${
+                            queuedIds.has(o.id)
+                              ? 'border-emerald-700 bg-emerald-900/30 text-emerald-400 cursor-default'
+                              : 'border-blue-700 bg-blue-900/30 text-blue-400 hover:bg-blue-800/40'
+                          }`}
                         >
-                          Place $20
+                          {queuedIds.has(o.id) ? 'Queued' : 'Place $20'}
                         </button>
                       )}
                     </td>

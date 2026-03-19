@@ -232,6 +232,10 @@ def scan_betfair_overlays():
             if model_prob is None or model_prob <= 0:
                 continue
 
+            # Filter: don't bet Under on premium forwards (Tim's instruction)
+            if player_model and "Under" in runner_name and player_model["goals_per_game"] >= 1.0:
+                continue
+
             # Win Expectation = model probability × back odds
             we = round(model_prob * back_price, 3)
 

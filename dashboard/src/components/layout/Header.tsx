@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { fetchSystemConfig } from '../../lib/queries'
 
 type SportMode = 'nba' | 'racing' | 'afl' | 'soccer'
 
-const SPORT_TABS: { key: SportMode; label: string; icon: string }[] = [
-  { key: 'racing', label: 'Horse Racing', icon: '🏇' },
-  { key: 'nba', label: 'NBA', icon: '🏀' },
-  { key: 'afl', label: 'AFL', icon: '🏈' },
-  { key: 'soccer', label: 'Soccer', icon: '⚽' },
+const SPORT_TABS: { key: SportMode; label: string; icon: string; defaultRoute: string }[] = [
+  { key: 'racing', label: 'Horse Racing', icon: '🏇', defaultRoute: '/racing' },
+  { key: 'nba', label: 'NBA', icon: '🏀', defaultRoute: '/scanner' },
+  { key: 'afl', label: 'AFL', icon: '🏈', defaultRoute: '/overlays' },
+  { key: 'soccer', label: 'Soccer', icon: '⚽', defaultRoute: '/overlays' },
 ]
 
 interface HeaderProps {
@@ -19,6 +20,7 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuToggle, viewMode, onViewModeChange, sportMode, onSportModeChange }: HeaderProps) {
+  const navigate = useNavigate()
   const { data: config } = useQuery({
     queryKey: ['system-config'],
     queryFn: fetchSystemConfig,
@@ -50,7 +52,7 @@ export function Header({ onMenuToggle, viewMode, onViewModeChange, sportMode, on
         {SPORT_TABS.map(tab => (
           <button
             key={tab.key}
-            onClick={() => onSportModeChange(tab.key)}
+            onClick={() => { onSportModeChange(tab.key); navigate(tab.defaultRoute) }}
             className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
               sportMode === tab.key
                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
