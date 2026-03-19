@@ -158,19 +158,67 @@ export function HorseRacingPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">🏇 Horse Racing</h2>
+          <h2 className="text-xl font-bold text-white">Horse Racing</h2>
           <p className="text-xs text-gray-500 mt-1">
             {allResults.length} runners analysed | Win Expectation overlay scanner
           </p>
         </div>
-        <button
-          onClick={() => scanMutation.mutate()}
-          disabled={scanMutation.isPending}
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
-        >
-          {scanMutation.isPending ? 'Scanning...' : 'Scan Races'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => scanMutation.mutate()}
+            disabled={scanMutation.isPending}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {scanMutation.isPending ? 'Scanning...' : 'Scan Races'}
+          </button>
+        </div>
       </div>
+
+      {/* Autonomous Betting Panel */}
+      {overlayCount > 0 && (
+        <div className="rounded-xl border-2 border-emerald-500/30 bg-emerald-500/5 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-sm font-bold text-white">Auto-Bet Top Overlays</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                System will place bets on the top overlays sorted by W.E. (net of commission)
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">Bets per day:</span>
+              {[4, 6, 8, 10].map(n => (
+                <button
+                  key={n}
+                  className="rounded px-2 py-1 text-xs font-mono bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4 p-3 rounded-lg bg-gray-900/50">
+            <div>
+              <span className="text-[10px] text-gray-500">Stake per bet</span>
+              <p className="text-sm font-mono font-bold text-white">$20</p>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500">Today's exposure</span>
+              <p className="text-sm font-mono font-bold text-amber-400">${overlayCount > 6 ? 6 * 20 : overlayCount * 20}</p>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500">Avg W.E. of top 6</span>
+              <p className="text-sm font-mono font-bold text-emerald-400">
+                {allResults.filter(r => r.verdict === 'OVERLAY').slice(0, 6).length > 0
+                  ? (allResults.filter(r => r.verdict === 'OVERLAY').slice(0, 6).reduce((s, r) => s + r.we_net, 0) / Math.min(6, overlayCount)).toFixed(3)
+                  : '—'}
+              </p>
+            </div>
+          </div>
+          <p className="mt-2 text-[10px] text-gray-600">
+            Configure bet size, daily limits, and W.E. threshold in Settings → Horse Racing
+          </p>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -281,9 +329,9 @@ export function HorseRacingPage() {
                   <td className="px-3 py-2.5 text-[10px] text-gray-400">{formatTime(r.start_time)}</td>
                   <td className="px-3 py-2.5">
                     {r.verdict === 'OVERLAY' && (
-                      <button className="rounded bg-emerald-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-500">
-                        Bet $20
-                      </button>
+                      <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/40">
+                        Auto
+                      </span>
                     )}
                   </td>
                 </tr>

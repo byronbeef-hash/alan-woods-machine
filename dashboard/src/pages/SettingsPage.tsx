@@ -548,6 +548,142 @@ export function SettingsPage() {
         )}
       </div>
 
+      {/* Horse Racing Settings */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+        <h3 className="text-sm font-semibold text-gray-300 mb-4">🏇 Horse Racing — Autonomous Betting</h3>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400">Bet Size (per race)</p>
+              <p className="text-[10px] text-gray-600">Fixed stake on each overlay bet</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {[10, 20, 50, 100].map(amt => (
+                <button
+                  key={amt}
+                  onClick={() => {
+                    setLocal(prev => ({ ...prev, racing_bet_size: amt }))
+                    setDirty(prev => new Set(prev).add('racing_bet_size'))
+                  }}
+                  className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
+                    (local['racing_bet_size'] as number || 20) === amt
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                >
+                  ${amt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400">Max Bets Per Day</p>
+              <p className="text-[10px] text-gray-600">Top N overlays by W.E. placed daily</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {[4, 6, 8, 10, 15].map(n => (
+                <button
+                  key={n}
+                  onClick={() => {
+                    setLocal(prev => ({ ...prev, racing_max_daily_bets: n }))
+                    setDirty(prev => new Set(prev).add('racing_max_daily_bets'))
+                  }}
+                  className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
+                    (local['racing_max_daily_bets'] as number || 6) === n
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400">Min W.E. Threshold</p>
+              <p className="text-[10px] text-gray-600">Only bet on overlays with W.E.(net) above this</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {[1.02, 1.05, 1.08, 1.10].map(we => (
+                <button
+                  key={we}
+                  onClick={() => {
+                    setLocal(prev => ({ ...prev, racing_min_we: we }))
+                    setDirty(prev => new Set(prev).add('racing_min_we'))
+                  }}
+                  className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
+                    (local['racing_min_we'] as number || 1.05) === we
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                >
+                  {we.toFixed(2)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400">Min Liquidity</p>
+              <p className="text-[10px] text-gray-600">Only bet when Betfair has this much available to back</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">$</span>
+              <input
+                type="number"
+                value={(local['racing_min_liquidity'] as number) || 50}
+                onChange={e => {
+                  const v = parseInt(e.target.value)
+                  if (!isNaN(v) && v >= 10) {
+                    setLocal(prev => ({ ...prev, racing_min_liquidity: v }))
+                    setDirty(prev => new Set(prev).add('racing_min_liquidity'))
+                  }
+                }}
+                className="w-20 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs font-mono text-white text-right"
+                min={10}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400">Bet Types</p>
+              <p className="text-[10px] text-gray-600">Which markets to bet on</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {['Win', 'Place', 'Both'].map(bt => (
+                <button
+                  key={bt}
+                  onClick={() => {
+                    setLocal(prev => ({ ...prev, racing_bet_type: bt.toLowerCase() }))
+                    setDirty(prev => new Set(prev).add('racing_bet_type'))
+                  }}
+                  className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
+                    (local['racing_bet_type'] as string || 'win') === bt.toLowerCase()
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                >
+                  {bt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+            <p className="text-xs text-emerald-400">
+              Daily exposure: ${((local['racing_bet_size'] as number || 20) * (local['racing_max_daily_bets'] as number || 6)).toLocaleString()} max
+              ({local['racing_max_daily_bets'] as number || 6} bets × ${local['racing_bet_size'] as number || 20} each)
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <SettingsSection title="Kelly & Sizing" fields={KELLY_FIELDS} values={local} onChange={handleChange} dirty={dirty} />
         <SettingsSection title="Thresholds" fields={THRESHOLD_FIELDS} values={local} onChange={handleChange} dirty={dirty} />
