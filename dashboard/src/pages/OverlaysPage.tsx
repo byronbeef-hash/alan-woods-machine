@@ -122,6 +122,40 @@ function marketLabel(key: string): string {
 // ---------------------------------------------------------------------------
 
 async function fetchGameOverlays(sport: string): Promise<GameOverlay[]> {
+  // Horse Racing uses racing_overlays table, everything else uses game_overlays
+  if (sport === 'racing') {
+    const { data, error } = await supabase
+      .from('racing_overlays')
+      .select('*')
+      .order('we_net', { ascending: false })
+      .limit(200)
+    if (error) throw error
+    // Map racing_overlays fields to GameOverlay shape
+    return ((data || []) as Record<string, unknown>[]).map(r => ({
+      id: r.id as number,
+      sport: 'racing',
+      sport_label: 'Racing',
+      event_id: '',
+      home_team: (r.meeting as string) || '',
+      away_team: '',
+      commence_time: (r.start_time as string) || '',
+      market: (r.race as string) || '',
+      selection: (r.name as string) || '',
+      line: null,
+      best_odds: (r.back_price as number) || 0,
+      best_book: 'Betfair Exchange',
+      avg_odds: (r.back_price as number) || 0,
+      worst_odds: (r.back_price as number) || 0,
+      edge_pct: ((r.edge as number) || 0) * 100,
+      implied_prob: ((r.model_prob as number) || 0) * 100,
+      num_bookmakers: 1,
+      betfair_back: (r.back_price as number) || null,
+      betfair_lay: (r.lay_price as number) || null,
+      tier: (r.tier as string) || 'MARGINAL',
+      scan_id: (r.scan_id as string) || '',
+    })) as GameOverlay[]
+  }
+
   let query = supabase
     .from('game_overlays')
     .select('*')
@@ -166,7 +200,7 @@ const SPORT_MODE_TO_KEY: Record<string, string> = {
   nba: 'basketball_nba',
   afl: 'aussierules_afl',
   soccer: 'soccer_epl',
-  racing: '',
+  racing: 'racing',
 }
 
 export function OverlaysPage() {

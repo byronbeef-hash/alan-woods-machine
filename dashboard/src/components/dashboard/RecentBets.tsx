@@ -75,7 +75,9 @@ export function RecentBets({ bets }: RecentBetsProps) {
                     <span className="inline-flex h-4 w-4 items-center justify-center rounded border border-emerald-500/50 bg-emerald-500/20 text-emerald-400 text-xs">
                       ✓
                     </span>
-                    <span className="text-[10px] font-medium text-violet-400">DEMO</span>
+                    <span className={`text-[10px] font-medium ${bet.notes?.includes('LIVE') ? 'text-red-400' : 'text-violet-400'}`}>
+                      {bet.notes?.includes('LIVE') ? 'LIVE' : 'DEMO'}
+                    </span>
                   </div>
                 </td>
                 <td className="px-3 py-2.5 text-xs text-gray-400">
