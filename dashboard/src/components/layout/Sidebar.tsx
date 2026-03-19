@@ -21,10 +21,12 @@ const sportNavItems: Record<SportMode, { to: string; label: string; icon: string
   ],
   afl: [
     { to: '/overlays', label: 'Scanner', icon: '!' },
+    { to: '/overlays', label: 'Overlays', icon: '⚡' },
     { to: '/bets', label: 'Bets', icon: '#' },
   ],
   soccer: [
     { to: '/overlays', label: 'Scanner', icon: '!' },
+    { to: '/overlays', label: 'Overlays', icon: '⚡' },
     { to: '/bets', label: 'Bets', icon: '#' },
   ],
 }
