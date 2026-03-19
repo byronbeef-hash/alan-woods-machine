@@ -3,6 +3,26 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { formatGameTime } from '../lib/utils'
 
+async function placeBetfairRequest(overlay: { market_id?: string; selection?: string; betfair_back?: number | null; sport?: string; home_team?: string; away_team?: string; market?: string }) {
+  const { error } = await supabase
+    .from('system_config')
+    .upsert({
+      key: 'place_bet_request',
+      value: {
+        market_id: overlay.market_id || '',
+        selection: overlay.selection || '',
+        back_price: overlay.betfair_back || 0,
+        stake: 20,
+        sport: overlay.sport || '',
+        game: `${overlay.away_team} @ ${overlay.home_team}`,
+        market: overlay.market || '',
+        requested_at: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    })
+  if (error) throw error
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -410,8 +430,13 @@ export function OverlaysPage() {
                     {/* Betfair Action */}
                     <td className="px-4 py-3">
                       {o.betfair_back !== null && (
-                        <button className="rounded-lg border border-blue-700 bg-blue-900/30 px-3 py-1 text-xs font-medium text-blue-400 hover:bg-blue-800/40 transition-colors">
-                          Place on Betfair
+                        <button
+                          onClick={() => {
+                            placeBetfairRequest(o).then(() => alert(`Bet queued: ${o.selection} @ ${o.betfair_back}`)).catch(err => alert(`Error: ${err.message}`))
+                          }}
+                          className="rounded-lg border border-blue-700 bg-blue-900/30 px-3 py-1 text-xs font-medium text-blue-400 hover:bg-blue-800/40 transition-colors"
+                        >
+                          Place $20
                         </button>
                       )}
                     </td>
