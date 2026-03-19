@@ -10,21 +10,21 @@ const commonItems = [
 
 const sportNavItems: Record<SportMode, { to: string; label: string; icon: string }[]> = {
   racing: [
-    { to: '/racing', label: 'Race Scanner', icon: '🏇' },
+    { to: '/racing', label: 'Scanner', icon: '!' },
     { to: '/overlays', label: 'Overlays', icon: '⚡' },
     { to: '/bets', label: 'Bets', icon: '#' },
   ],
   nba: [
-    { to: '/scanner', label: 'Player Scanner', icon: '!' },
+    { to: '/scanner', label: 'Scanner', icon: '!' },
     { to: '/overlays', label: 'Overlays', icon: '⚡' },
     { to: '/bets', label: 'Bets', icon: '#' },
   ],
   afl: [
-    { to: '/overlays', label: 'AFL Overlays', icon: '🏈' },
+    { to: '/overlays', label: 'Scanner', icon: '!' },
     { to: '/bets', label: 'Bets', icon: '#' },
   ],
   soccer: [
-    { to: '/overlays', label: 'Overlays', icon: '⚡' },
+    { to: '/overlays', label: 'Scanner', icon: '!' },
     { to: '/bets', label: 'Bets', icon: '#' },
   ],
 }
