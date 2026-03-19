@@ -2,12 +2,35 @@ import { NavLink } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '../../lib/auth'
 
-const navItems = [
+type SportMode = 'nba' | 'racing' | 'afl' | 'soccer'
+
+const commonItems = [
   { to: '/', label: 'Dashboard', icon: '~' },
-  { to: '/racing', label: 'Horse Racing', icon: '🏇' },
-  { to: '/scanner', label: 'Scanner', icon: '!' },
-  { to: '/overlays', label: 'Overlays', icon: '⚡' },
-  { to: '/bets', label: 'Bets', icon: '#' },
+]
+
+const sportNavItems: Record<SportMode, { to: string; label: string; icon: string }[]> = {
+  racing: [
+    { to: '/racing', label: 'Race Scanner', icon: '🏇' },
+    { to: '/overlays', label: 'Overlays', icon: '⚡' },
+    { to: '/bets', label: 'Bets', icon: '#' },
+  ],
+  nba: [
+    { to: '/scanner', label: 'Player Scanner', icon: '!' },
+    { to: '/overlays', label: 'Overlays', icon: '⚡' },
+    { to: '/bets', label: 'Bets', icon: '#' },
+  ],
+  afl: [
+    { to: '/racing', label: 'AFL Scanner', icon: '🏈' },
+    { to: '/overlays', label: 'Overlays', icon: '⚡' },
+    { to: '/bets', label: 'Bets', icon: '#' },
+  ],
+  soccer: [
+    { to: '/overlays', label: 'Overlays', icon: '⚡' },
+    { to: '/bets', label: 'Bets', icon: '#' },
+  ],
+}
+
+const bottomItems = [
   { to: '/markets', label: 'Markets', icon: '%' },
   { to: '/settings', label: 'Settings', icon: '*' },
 ]
@@ -15,10 +38,17 @@ const navItems = [
 interface SidebarProps {
   open: boolean
   onClose: () => void
+  sportMode?: SportMode
 }
 
-export function Sidebar({ open, onClose }: SidebarProps) {
+export function Sidebar({ open, onClose, sportMode = 'racing' }: SidebarProps) {
   const { signOut, user } = useAuth()
+
+  const navItems = [
+    ...commonItems,
+    ...(sportNavItems[sportMode] || sportNavItems.racing),
+    ...bottomItems,
+  ]
 
   return (
     <>

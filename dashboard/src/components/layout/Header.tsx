@@ -1,13 +1,24 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchSystemConfig } from '../../lib/queries'
 
+type SportMode = 'nba' | 'racing' | 'afl' | 'soccer'
+
+const SPORT_TABS: { key: SportMode; label: string; icon: string }[] = [
+  { key: 'racing', label: 'Horse Racing', icon: '🏇' },
+  { key: 'nba', label: 'NBA', icon: '🏀' },
+  { key: 'afl', label: 'AFL', icon: '🏈' },
+  { key: 'soccer', label: 'Soccer', icon: '⚽' },
+]
+
 interface HeaderProps {
   onMenuToggle: () => void
   viewMode: 'demo' | 'live'
   onViewModeChange: (mode: 'demo' | 'live') => void
+  sportMode: SportMode
+  onSportModeChange: (mode: SportMode) => void
 }
 
-export function Header({ onMenuToggle, viewMode, onViewModeChange }: HeaderProps) {
+export function Header({ onMenuToggle, viewMode, onViewModeChange, sportMode, onSportModeChange }: HeaderProps) {
   const { data: config } = useQuery({
     queryKey: ['system-config'],
     queryFn: fetchSystemConfig,
@@ -32,9 +43,24 @@ export function Header({ onMenuToggle, viewMode, onViewModeChange }: HeaderProps
           W
         </div>
         <h1 className="text-base lg:text-lg font-bold text-white">Woods System</h1>
-        <span className="hidden sm:inline rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-400">
-          NBA Props
-        </span>
+      </div>
+
+      {/* Sport tabs */}
+      <div className="ml-4 flex items-center gap-1 overflow-x-auto">
+        {SPORT_TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => onSportModeChange(tab.key)}
+            className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+              sportMode === tab.key
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'
+            }`}
+          >
+            <span>{tab.icon}</span>
+            <span className="hidden sm:inline">{tab.label}</span>
+          </button>
+        ))}
       </div>
 
       <div className="ml-auto flex items-center gap-2">
