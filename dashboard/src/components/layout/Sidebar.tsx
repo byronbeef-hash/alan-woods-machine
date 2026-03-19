@@ -4,6 +4,7 @@ import { useAuth } from '../../lib/auth'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '~' },
+  { to: '/racing', label: 'Horse Racing', icon: '🏇' },
   { to: '/scanner', label: 'Scanner', icon: '!' },
   { to: '/overlays', label: 'Overlays', icon: '⚡' },
   { to: '/bets', label: 'Bets', icon: '#' },
