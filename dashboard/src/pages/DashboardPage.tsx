@@ -8,7 +8,7 @@ import { RecentBets } from '../components/dashboard/RecentBets'
 import { TierBreakdown } from '../components/dashboard/TierBreakdown'
 import { ActivityLog } from '../components/dashboard/ActivityLog'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
-import { useViewMode } from '../components/layout/PageShell'
+import { useViewMode, useSportMode } from '../components/layout/PageShell'
 
 interface LiveBet {
   player: string
@@ -39,13 +39,22 @@ interface TopOverlay {
   commence_time: string
 }
 
-async function fetchTopOverlays(): Promise<TopOverlay[]> {
-  const { data, error } = await supabase
+const SPORT_MODE_TO_KEY: Record<string, string> = {
+  nba: 'basketball_nba',
+  afl: 'aussierules_afl',
+  soccer: 'soccer_epl',
+  racing: '',
+}
+
+async function fetchTopOverlays(sportKey: string): Promise<TopOverlay[]> {
+  let query = supabase
     .from('game_overlays')
     .select('*')
     .gt('edge_pct', 2)
     .order('edge_pct', { ascending: false })
     .limit(8)
+  if (sportKey) query = query.eq('sport', sportKey)
+  const { data, error } = await query
   if (error) throw error
   return (data as TopOverlay[]) || []
 }
@@ -122,6 +131,8 @@ async function fetchLiveBets(): Promise<LiveBet[]> {
 export function DashboardPage() {
   const { data: bets, isLoading, error } = useAllBets()
   const viewMode = useViewMode()
+  const sportMode = useSportMode()
+  const sportKey = SPORT_MODE_TO_KEY[sportMode] || ''
   useRealtimeBets()
 
   const { data: config } = useQuery({
@@ -130,8 +141,8 @@ export function DashboardPage() {
   })
 
   const { data: topOverlays } = useQuery({
-    queryKey: ['top_overlays'],
-    queryFn: fetchTopOverlays,
+    queryKey: ['top_overlays', sportKey],
+    queryFn: () => fetchTopOverlays(sportKey),
     refetchInterval: 60000,
   })
 

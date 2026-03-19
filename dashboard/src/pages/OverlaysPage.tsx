@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { formatGameTime } from '../lib/utils'
+import { useSportMode } from '../components/layout/PageShell'
 
 async function placeBetfairRequest(overlay: { market_id?: string; selection?: string; betfair_back?: number | null; sport?: string; home_team?: string; away_team?: string; market?: string }) {
   const { error } = await supabase
@@ -161,13 +162,27 @@ function calcWE(o: GameOverlay): number {
   return modelProb * netOdds
 }
 
+const SPORT_MODE_TO_KEY: Record<string, string> = {
+  nba: 'basketball_nba',
+  afl: 'aussierules_afl',
+  soccer: 'soccer_epl',
+  racing: '',
+}
+
 export function OverlaysPage() {
-  const [sport, setSport] = useState('')
+  const sportMode = useSportMode()
+  const [sport, setSport] = useState(SPORT_MODE_TO_KEY[sportMode] || '')
   const [scanning, setScanning] = useState(false)
   const [scanMessage, setScanMessage] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('we')
   const [sortAsc, setSortAsc] = useState(false)
   const [queuedIds, setQueuedIds] = useState<Set<number>>(new Set())
+
+  // Sync sport filter when header tab changes
+  useEffect(() => {
+    const mapped = SPORT_MODE_TO_KEY[sportMode] || ''
+    setSport(mapped)
+  }, [sportMode])
 
   const {
     data: overlays = [],
