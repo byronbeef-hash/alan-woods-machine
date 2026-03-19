@@ -47,6 +47,30 @@ const SPORT_MODE_TO_KEY: Record<string, string> = {
 }
 
 async function fetchTopOverlays(sportKey: string): Promise<TopOverlay[]> {
+  if (sportKey === 'racing') {
+    const { data, error } = await supabase
+      .from('racing_overlays')
+      .select('*')
+      .eq('verdict', 'OVERLAY')
+      .order('we_net', { ascending: false })
+      .limit(8)
+    if (error) throw error
+    return ((data || []) as Record<string, unknown>[]).map(r => ({
+      id: r.id as number,
+      selection: (r.name as string) || '',
+      market: (r.race as string) || '',
+      sport_label: 'Racing',
+      home_team: (r.meeting as string) || '',
+      away_team: '',
+      betfair_back: (r.back_price as number) || null,
+      betfair_lay: (r.lay_price as number) || null,
+      edge_pct: ((r.edge as number) || 0) * 100,
+      implied_prob: ((r.model_prob as number) || 0) * 100,
+      tier: (r.tier as string) || '',
+      commence_time: (r.start_time as string) || '',
+    })) as TopOverlay[]
+  }
+
   let query = supabase
     .from('game_overlays')
     .select('*')
