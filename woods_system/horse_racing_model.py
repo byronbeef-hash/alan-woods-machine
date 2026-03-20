@@ -368,6 +368,48 @@ class HorseRacingModel:
                 verdict = "UNDERLAY"
                 tier = "AVOID"
 
+            # Count data points used by the model
+            data_points = 0
+            data_sources = []
+            form_str = meta.get('FORM', '') or ''
+            if form_str:
+                data_points += len([c for c in form_str if c.isdigit() or c.lower() in ('x', 'f', 'd')])
+                data_sources.append(f"Form: {len([c for c in form_str if c.isdigit() or c.lower() in ('x','f','d')])} races")
+            if meta.get('STALL_DRAW'):
+                data_points += 1; data_sources.append("Barrier draw")
+            if meta.get('JOCKEY_NAME'):
+                data_points += 1
+                jn = meta['JOCKEY_NAME']
+                data_sources.append(f"Jockey: {jn}" + (" (ELITE)" if jn in ELITE_JOCKEYS else ""))
+            if meta.get('TRAINER_NAME'):
+                data_points += 1
+                tn = meta['TRAINER_NAME']
+                data_sources.append(f"Trainer: {tn}" + (" (ELITE)" if tn in ELITE_TRAINERS else ""))
+            if meta.get('WEIGHT_VALUE'):
+                data_points += 1; data_sources.append("Weight carried")
+            if meta.get('AGE'):
+                data_points += 1; data_sources.append("Age")
+            if meta.get('DAYS_SINCE_LAST_RUN') and int(meta.get('DAYS_SINCE_LAST_RUN', 0) or 0) > 0:
+                data_points += 1; data_sources.append("Days since last run")
+            if meta.get('OFFICIAL_RATING') and meta['OFFICIAL_RATING'] != 'None':
+                data_points += 1; data_sources.append(f"Official rating: {meta['OFFICIAL_RATING']}")
+            if meta.get('SIRE_NAME'):
+                data_points += 1; data_sources.append(f"Sire: {meta['SIRE_NAME']}")
+            if meta.get('DAM_NAME'):
+                data_points += 1; data_sources.append(f"Dam: {meta['DAM_NAME']}")
+
+            # Parse form into individual race results
+            form_parsed = []
+            for ch in str(form_str):
+                if ch.isdigit():
+                    form_parsed.append({'position': int(ch), 'label': f'{ch}{"st" if ch=="1" else "nd" if ch=="2" else "rd" if ch=="3" else "th"}'})
+                elif ch.lower() == 'x':
+                    form_parsed.append({'position': 9, 'label': 'Fall/DNF'})
+                elif ch.lower() == 'f':
+                    form_parsed.append({'position': 9, 'label': 'Fell'})
+                elif ch.lower() == '0':
+                    form_parsed.append({'position': 10, 'label': '10th+'})
+
             results.append({
                 'name': name,
                 'barrier': int(meta.get('STALL_DRAW', 0) or 0),
@@ -375,7 +417,7 @@ class HorseRacingModel:
                 'trainer': meta.get('TRAINER_NAME', ''),
                 'weight': float(meta.get('WEIGHT_VALUE', 0) or 0),
                 'age': int(meta.get('AGE', 0) or 0),
-                'form': meta.get('FORM', ''),
+                'form': form_str,
                 'days_since_run': int(meta.get('DAYS_SINCE_LAST_RUN', 0) or 0),
                 'race': market_name,
                 'market_id': market_id,
@@ -391,11 +433,28 @@ class HorseRacingModel:
                 'combined_factor': model_result['combined_factor'],
                 'adjustments': model_result['adjustments'],
                 'form_score': model_result['form_score'],
+                'form_parsed': form_parsed,
                 'edge': round(edge, 4),
                 'we_raw': round(we_raw, 3),
                 'we_net': round(we_net, 3),
                 'verdict': verdict,
                 'tier': tier,
+                # Extra metadata from Betfair
+                'sex': meta.get('SEX_TYPE', ''),
+                'colour': meta.get('COLOUR_TYPE', ''),
+                'sire': meta.get('SIRE_NAME', ''),
+                'dam': meta.get('DAM_NAME', ''),
+                'damsire': meta.get('DAMSIRE_NAME', ''),
+                'official_rating': meta.get('OFFICIAL_RATING', ''),
+                'wearing': meta.get('WEARING', ''),
+                'silk_url': meta.get('COLOURS_FILENAME_URL', ''),
+                'cloth_number': meta.get('CLOTH_NUMBER', ''),
+                'bred': meta.get('BRED', ''),
+                'jockey_is_elite': meta.get('JOCKEY_NAME', '') in ELITE_JOCKEYS,
+                'trainer_is_elite': meta.get('TRAINER_NAME', '') in ELITE_TRAINERS,
+                'data_points': data_points,
+                'data_sources': data_sources,
+                'median_weight': round(median_weight, 1),
             })
 
         # Normalise model probabilities within race
@@ -465,7 +524,7 @@ class HorseRacingModel:
                         f"  |  Model {o['model_prob']:.1%} vs Market {o['market_prob']:.1%}"
                         f"  |  W.E.(net) = {o['we_net']:.3f}"
                         f"  |  Form: {o['form'] or '?':>8}"
-                        f"  |  B{o['barrier']} J:{o['jockey'][:15]}"
+                        f"  |  B{o['barrier']} J:{(o['jockey'] or '')[:15]}"
                     )
             all_results.extend(results)
 

@@ -422,6 +422,59 @@ def _check_manual_scan_requests():
         log.exception(f"Error processing manual scan request: {e}")
 
 
+def _check_racing_scan_requests():
+    """Poll for racing scan requests from the dashboard — writes fresh data to racing_overlays."""
+    try:
+        from database import Database
+        db = Database()
+        request = db.get_racing_scan_request()
+        if not request:
+            return
+
+        log.info("Racing scan request received — scanning all AU meetings...")
+
+        from horse_racing_model import HorseRacingModel
+        model = HorseRacingModel()
+        results = model.scan_all_meetings(hours_ahead=48)
+
+        if results:
+            import uuid
+            scan_id = str(uuid.uuid4())[:8]
+
+            # Add meeting info from event name
+            for r in results:
+                if not r.get('meeting'):
+                    # Extract meeting from race name or market
+                    r['meeting'] = r.get('race', '').split(' ')[0] if r.get('race') else ''
+
+            inserted = db.insert_racing_overlays(results, scan_id)
+            overlays = [r for r in results if r['verdict'] == 'OVERLAY']
+            log.info(f"Racing scan complete: {len(results)} runners, {len(overlays)} overlays, {inserted} written to DB")
+        else:
+            log.info("Racing scan: no results found")
+
+        db.clear_racing_scan_request()
+        log.info("Racing scan request cleared.")
+    except Exception as e:
+        log.exception(f"Error processing racing scan request: {e}")
+        # Still try to clear the request so it doesn't loop
+        try:
+            from database import Database
+            Database().clear_racing_scan_request()
+        except Exception:
+            pass
+
+
+def _expire_racing_overlays():
+    """Delete stale racing overlays older than 2 hours."""
+    try:
+        from database import Database
+        db = Database()
+        db.expire_racing_overlays(max_age_hours=2)
+    except Exception as e:
+        log.debug(f"Error expiring racing overlays: {e}")
+
+
 def _check_mirror_bet_requests():
     """Poll for mirror bet requests from the dashboard."""
     try:
@@ -542,6 +595,8 @@ def start_scheduler():
     schedule.every(2).minutes.do(run_live_monitor_if_game_hours)
     schedule.every(1).hours.do(_expire_scan_results)
     schedule.every(30).seconds.do(_check_manual_scan_requests)
+    schedule.every(30).seconds.do(_check_racing_scan_requests)
+    schedule.every(30).minutes.do(_expire_racing_overlays)
     schedule.every(30).seconds.do(_check_mirror_bet_requests)
 
     # Graceful shutdown

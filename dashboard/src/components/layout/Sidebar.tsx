@@ -12,6 +12,8 @@ const sportNavItems: Record<SportMode, { to: string; label: string; icon: string
   racing: [
     { to: '/racing', label: 'Scanner', icon: '!' },
     { to: '/overlays', label: 'Overlays', icon: '⚡' },
+    { to: '/planner', label: 'Planner', icon: '$' },
+    { to: '/results', label: 'Results', icon: '=' },
     { to: '/bets', label: 'Bets', icon: '#' },
   ],
   nba: [

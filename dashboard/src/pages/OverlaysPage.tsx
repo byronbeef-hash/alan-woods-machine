@@ -445,12 +445,11 @@ export function OverlaysPage() {
                       {(o.implied_prob).toFixed(1)}%
                     </td>
 
-                    {/* Win Expectation = P(win) × back odds */}
+                    {/* Win Expectation = P(win) × net odds (after 5% commission) */}
                     <td className="px-4 py-3 text-right font-mono font-bold">
                       {(() => {
-                        if (!o.betfair_back || !o.betfair_lay || o.betfair_lay <= 1) return <span className="text-gray-600">&mdash;</span>
-                        const trueProb = 1 / o.betfair_lay
-                        const we = trueProb * o.betfair_back
+                        const we = calcWE(o)
+                        if (!we) return <span className="text-gray-600">&mdash;</span>
                         const color = we > 1.05 ? 'text-emerald-400' : we >= 0.92 ? 'text-amber-400' : 'text-red-400'
                         return <span className={color}>{we.toFixed(3)}</span>
                       })()}

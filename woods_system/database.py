@@ -12,7 +12,7 @@ Tables:
 import os
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import config
@@ -495,6 +495,113 @@ class Database:
             return True
         except Exception as e:
             print(f"  [Supabase] Error clearing manual scan request: {e}")
+            return False
+
+    # -------------------------------------------------------------------------
+    # Racing Overlays (horse racing scanner → dashboard)
+    # -------------------------------------------------------------------------
+
+    def insert_racing_overlays(self, results: list[dict], scan_id: str) -> int:
+        """Write fresh racing overlay results. Clears ALL old data first — no stale data ever."""
+        if not self.enabled or not results:
+            return 0
+
+        # Delete ALL existing rows — fresh scan replaces everything
+        try:
+            self.client.table("racing_overlays").delete().neq("id", 0).execute()
+        except Exception as e:
+            print(f"  [Supabase] Warning: could not clear old racing overlays: {e}")
+
+        records = []
+        for r in results:
+            records.append({
+                "name": r.get("name", ""),
+                "barrier": r.get("barrier", 0),
+                "jockey": r.get("jockey", ""),
+                "trainer": r.get("trainer", ""),
+                "weight": r.get("weight", 0),
+                "age": r.get("age", 0),
+                "form": r.get("form", ""),
+                "days_since_run": r.get("days_since_run", 0),
+                "race": r.get("race", ""),
+                "market_id": r.get("market_id", ""),
+                "selection_id": r.get("selection_id", 0),
+                "start_time": r.get("start_time", ""),
+                "field_size": r.get("field_size", 0),
+                "back_price": r.get("back_price", 0),
+                "back_size": r.get("back_size", 0),
+                "lay_price": r.get("lay_price"),
+                "lay_size": r.get("lay_size", 0),
+                "market_prob": r.get("market_prob", 0),
+                "model_prob": r.get("model_prob", 0),
+                "combined_factor": r.get("combined_factor", 1.0),
+                "form_score": r.get("form_score", 0.5),
+                "edge": r.get("edge", 0),
+                "we_raw": r.get("we_raw", 0),
+                "we_net": r.get("we_net", 0),
+                "verdict": r.get("verdict", "UNDERLAY"),
+                "tier": r.get("tier", "AVOID"),
+                "bet_type": r.get("bet_type", "WIN"),
+                "meeting": r.get("meeting", ""),
+                "scan_id": scan_id,
+            })
+
+        try:
+            # Insert in batches of 100
+            inserted = 0
+            for i in range(0, len(records), 100):
+                batch = records[i:i + 100]
+                self.client.table("racing_overlays").insert(batch).execute()
+                inserted += len(batch)
+            print(f"  [Supabase] Inserted {inserted} racing overlays (scan {scan_id})")
+            return inserted
+        except Exception as e:
+            print(f"  [Supabase] Error inserting racing overlays: {e}")
+            return 0
+
+    def expire_racing_overlays(self, max_age_hours: int = 2):
+        """Delete racing overlays older than max_age_hours to prevent stale data."""
+        if not self.enabled:
+            return
+        try:
+            cutoff = (datetime.now() - timedelta(hours=max_age_hours)).isoformat()
+            self.client.table("racing_overlays").delete().lt("created_at", cutoff).execute()
+        except Exception as e:
+            print(f"  [Supabase] Error expiring racing overlays: {e}")
+
+    def get_racing_scan_request(self) -> Optional[dict]:
+        """Read pending racing scan request from system_config."""
+        if not self.enabled:
+            return None
+        try:
+            result = (
+                self.client.table("system_config")
+                .select("value")
+                .eq("key", "racing_scan_request")
+                .single()
+                .execute()
+            )
+            if result.data and result.data.get("value"):
+                val = result.data["value"]
+                if isinstance(val, dict) and val.get("requested_at"):
+                    return val
+            return None
+        except Exception:
+            return None
+
+    def clear_racing_scan_request(self) -> bool:
+        """Clear racing scan request after processing."""
+        if not self.enabled:
+            return False
+        try:
+            self.client.table("system_config").upsert({
+                "key": "racing_scan_request",
+                "value": None,
+                "updated_at": datetime.now().isoformat(),
+            }).execute()
+            return True
+        except Exception as e:
+            print(f"  [Supabase] Error clearing racing scan request: {e}")
             return False
 
     def get_current_bankroll(self) -> Optional[float]:
