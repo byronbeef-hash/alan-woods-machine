@@ -9,6 +9,8 @@ import { MarketsPage } from './pages/MarketsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { OverlaysPage } from './pages/OverlaysPage'
 import { HorseRacingPage } from './pages/HorseRacingPage'
+import { PlannerPage } from './pages/PlannerPage'
+import { ResultsPage } from './pages/ResultsPage'
 import { LoginPage } from './pages/LoginPage'
 import { LoadingSpinner } from './components/common/LoadingSpinner'
 
@@ -43,6 +45,8 @@ function ProtectedApp() {
         <Route path="/racing" element={<HorseRacingPage />} />
         <Route path="/scanner" element={<ScannerPage />} />
         <Route path="/overlays" element={<OverlaysPage />} />
+        <Route path="/planner" element={<PlannerPage />} />
+        <Route path="/results" element={<ResultsPage />} />
         <Route path="/bets" element={<BetsPage />} />
         <Route path="/markets" element={<MarketsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
