@@ -6,6 +6,7 @@ type SportMode = 'nba' | 'racing' | 'afl' | 'soccer'
 
 const commonItems = [
   { to: '/', label: 'Dashboard', icon: '~' },
+  { to: '/daily', label: 'Daily', icon: '+' },
 ]
 
 const sportNavItems: Record<SportMode, { to: string; label: string; icon: string }[]> = {

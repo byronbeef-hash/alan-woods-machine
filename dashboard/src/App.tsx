@@ -11,6 +11,7 @@ import { OverlaysPage } from './pages/OverlaysPage'
 import { HorseRacingPage } from './pages/HorseRacingPage'
 import { PlannerPage } from './pages/PlannerPage'
 import { ResultsPage } from './pages/ResultsPage'
+import { DailyPage } from './pages/DailyPage'
 import { LoginPage } from './pages/LoginPage'
 import { LoadingSpinner } from './components/common/LoadingSpinner'
 
@@ -42,6 +43,7 @@ function ProtectedApp() {
     <Routes>
       <Route element={<PageShell />}>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/daily" element={<DailyPage />} />
         <Route path="/racing" element={<HorseRacingPage />} />
         <Route path="/scanner" element={<ScannerPage />} />
         <Route path="/overlays" element={<OverlaysPage />} />
