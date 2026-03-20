@@ -2,36 +2,83 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchSystemConfig, updateSystemConfig } from '../lib/queries'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
-import { SPORT_LABELS } from '../lib/types'
 
-interface SettingField {
-  key: string
-  label: string
-  min: number
-  max: number
-  step: number
-  format: 'percent' | 'dollar' | 'number'
+// ---------------------------------------------------------------------------
+// Sport definitions
+// ---------------------------------------------------------------------------
+
+const SPORTS = [
+  { key: 'racing', label: 'Horse Racing', icon: '#' },
+  { key: 'basketball_nba', label: 'NBA', icon: '@' },
+  { key: 'aussierules_afl', label: 'AFL', icon: '&' },
+  { key: 'soccer_epl', label: 'Soccer', icon: '*' },
+]
+
+// ---------------------------------------------------------------------------
+// Toggle component
+// ---------------------------------------------------------------------------
+
+function Toggle({ enabled, onChange, size = 'md' }: { enabled: boolean; onChange: (v: boolean) => void; size?: 'sm' | 'md' }) {
+  const h = size === 'sm' ? 'h-5 w-9' : 'h-6 w-11'
+  const dot = size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'
+  const tx = enabled ? (size === 'sm' ? 'translate-x-[18px]' : 'translate-x-6') : 'translate-x-1'
+  return (
+    <button
+      onClick={() => onChange(!enabled)}
+      className={`relative inline-flex ${h} items-center rounded-full transition-colors ${enabled ? 'bg-cyan-600' : 'bg-gray-700'}`}
+    >
+      <span className={`inline-block ${dot} transform rounded-full bg-white transition-transform ${tx}`} />
+    </button>
+  )
 }
 
-const KELLY_FIELDS: SettingField[] = [
-  { key: 'kelly_fraction', label: 'Kelly Fraction', min: 0.05, max: 1.0, step: 0.05, format: 'percent' },
-  { key: 'tier_cap_strong', label: 'Strong Tier Cap', min: 0.01, max: 0.25, step: 0.01, format: 'percent' },
-  { key: 'tier_cap_moderate', label: 'Moderate Tier Cap', min: 0.01, max: 0.15, step: 0.01, format: 'percent' },
-  { key: 'tier_cap_marginal', label: 'Marginal Tier Cap', min: 0.01, max: 0.10, step: 0.01, format: 'percent' },
-  { key: 'max_bet_fraction', label: 'Max Bet Fraction', min: 0.01, max: 0.25, step: 0.01, format: 'percent' },
-]
+// ---------------------------------------------------------------------------
+// Slider component
+// ---------------------------------------------------------------------------
 
-const THRESHOLD_FIELDS: SettingField[] = [
-  { key: 'min_edge_threshold', label: 'Min Edge Threshold', min: 0.01, max: 0.15, step: 0.01, format: 'percent' },
-  { key: 'min_bet_size', label: 'Min Bet Size', min: 1, max: 100, step: 1, format: 'dollar' },
-  { key: 'starting_bankroll', label: 'Starting Bankroll', min: 100, max: 100000, step: 100, format: 'dollar' },
-]
+function Slider({ value, min, max, step, onChange, prefix = '', suffix = '', presets }: {
+  value: number; min: number; max: number; step: number;
+  onChange: (v: number) => void; prefix?: string; suffix?: string;
+  presets?: number[]
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-3">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={e => onChange(parseFloat(e.target.value))}
+          className="flex-1 h-2 rounded-full appearance-none bg-gray-700 accent-cyan-500 cursor-pointer
+                     [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4
+                     [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400 [&::-webkit-slider-thumb]:cursor-pointer"
+        />
+        <span className="text-lg font-mono font-bold text-white min-w-[80px] text-right">
+          {prefix}{typeof value === 'number' ? value.toLocaleString() : value}{suffix}
+        </span>
+      </div>
+      {presets && (
+        <div className="flex items-center gap-1.5">
+          {presets.map(p => (
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              className={`rounded px-2 py-0.5 text-[10px] font-mono transition-colors ${
+                value === p ? 'bg-cyan-600 text-white' : 'bg-gray-800 text-gray-500 hover:bg-gray-700'
+              }`}
+            >{prefix}{p.toLocaleString()}{suffix}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
-const COMMISSION_FIELDS: SettingField[] = [
-  { key: 'commission_rate', label: 'Commission Rate', min: 0, max: 0.15, step: 0.005, format: 'percent' },
-]
-
-const ALL_SPORTS = Object.entries(SPORT_LABELS)
+// ---------------------------------------------------------------------------
+// Settings Page
+// ---------------------------------------------------------------------------
 
 export function SettingsPage() {
   const queryClient = useQueryClient()
@@ -62,30 +109,22 @@ export function SettingsPage() {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     },
-    onError: () => {
-      setSaving(false)
-    },
+    onError: () => setSaving(false),
   })
 
-  const handleChange = (key: string, value: number) => {
+  const set = (key: string, value: unknown) => {
     setLocal(prev => ({ ...prev, [key]: value }))
     setDirty(prev => new Set(prev).add(key))
   }
 
-  const handleSportsChange = (sportKey: string, enabled: boolean) => {
-    const current = (local['active_sports'] as string[]) || ['basketball_nba']
-    const updated = enabled
-      ? [...current, sportKey]
-      : current.filter(s => s !== sportKey)
-    setLocal(prev => ({ ...prev, active_sports: updated }))
-    setDirty(prev => new Set(prev).add('active_sports'))
+  const get = <T,>(key: string, fallback: T): T => {
+    const v = local[key]
+    return (v !== undefined && v !== null ? v : fallback) as T
   }
 
   const handleSave = () => {
     const changes: Record<string, unknown> = {}
-    for (const key of dirty) {
-      changes[key] = local[key]
-    }
+    for (const key of dirty) changes[key] = local[key]
     setSaving(true)
     mutation.mutate(changes)
   }
@@ -93,700 +132,458 @@ export function SettingsPage() {
   if (isLoading) return <LoadingSpinner />
   if (error) return <div className="text-red-400">Error loading settings: {(error as Error).message}</div>
 
-  const activeSports = (local['active_sports'] as string[]) || ['basketball_nba']
-  const tradingMode = (local['woods_mode'] as string) || 'demo'
-  const autoScanEnabled = (local['auto_scan_enabled'] as boolean) ?? false
-  const scanMode = (local['scan_mode'] as string) || 'manual'
+  const mode = get<string>('woods_mode', 'demo')
+  const scanMode = get<string>('scan_mode', 'manual')
+  const activeSports = get<string[]>('active_sports', ['basketball_nba'])
+  const bankroll = get<number>('starting_bankroll', 2546)
+  const dailyBudget = get<number>('daily_limit', 250)
+  const maxSingleBet = get<number>('max_single_bet', 100)
+  const dailyStopLoss = get<number>('daily_stop_loss', 500)
+  const scanFrequency = get<string>('scan_frequency', 'daily')
+  const autoScanEnabled = get<boolean>('auto_scan_enabled', false)
+  const kellyFraction = get<number>('kelly_fraction', 0.25)
+  const minEdge = get<number>('min_edge_threshold', 0.03)
+  const racingMinWe = get<number>('racing_min_we', 1.05)
 
-  const handleModeChange = (mode: string) => {
-    setLocal(prev => ({ ...prev, woods_mode: mode }))
-    setDirty(prev => new Set(prev).add('woods_mode'))
+  const isLive = mode === 'live'
+  const isAutonomous = scanMode === 'autonomous'
+
+  const toggleSport = (key: string) => {
+    const updated = activeSports.includes(key)
+      ? activeSports.filter(s => s !== key)
+      : [...activeSports, key]
+    set('active_sports', updated)
   }
 
-  const handleScanModeChange = (mode: string) => {
-    setLocal(prev => ({ ...prev, scan_mode: mode }))
-    setDirty(prev => new Set(prev).add('scan_mode'))
-  }
-
-  const handleAutoScanToggle = (enabled: boolean) => {
-    setLocal(prev => ({ ...prev, auto_scan_enabled: enabled }))
-    setDirty(prev => new Set(prev).add('auto_scan_enabled'))
-  }
+  const selectAllSports = () => set('active_sports', SPORTS.map(s => s.key))
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-white">Settings</h2>
+        <div>
+          <h2 className="text-xl font-bold text-white">Settings</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Configure the Alan Woods autonomous betting system</p>
+        </div>
         <div className="flex items-center gap-3">
-          {saved && <span className="text-sm text-emerald-400">Saved</span>}
+          {saved && <span className="text-sm text-emerald-400 font-medium">Saved</span>}
           <button
             onClick={handleSave}
             disabled={dirty.size === 0 || saving}
-            className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {saving ? 'Saving...' : `Save Changes${dirty.size > 0 ? ` (${dirty.size})` : ''}`}
+            {saving ? 'Saving...' : `Save${dirty.size > 0 ? ` (${dirty.size} changes)` : ''}`}
           </button>
         </div>
       </div>
 
-      <p className="text-xs text-gray-500">
-        Changes take up to 5 minutes to be picked up by the Python worker.
-      </p>
-
-      {/* Trading Mode — prominent at the top */}
+      {/* ================================================================= */}
+      {/* STEP 1: MODE — Demo or Live                                       */}
+      {/* ================================================================= */}
       <div className="rounded-xl border-2 border-gray-700 bg-gray-900 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-300">Trading Mode</h3>
-            <p className="text-xs text-gray-500 mt-1">Controls whether bets are placed on Betfair or paper-traded</p>
-          </div>
-          <div className={`px-3 py-1 rounded-full text-xs font-bold ${
-            tradingMode === 'live'
-              ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-              : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+        <div className="flex items-center gap-3 mb-4">
+          <span className="rounded-full bg-gray-800 px-2.5 py-1 text-[10px] font-bold text-gray-400">STEP 1</span>
+          <h3 className="text-sm font-bold text-white">Trading Mode</h3>
+          <div className={`ml-auto px-3 py-1 rounded-full text-xs font-bold ${
+            isLive ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
           }`}>
-            {tradingMode === 'live' ? '● LIVE' : '● DEMO'}
+            {isLive ? 'LIVE' : 'DEMO'}
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => handleModeChange('demo')}
+            onClick={() => set('woods_mode', 'demo')}
             className={`rounded-lg p-4 text-left transition-all ${
-              tradingMode === 'demo'
-                ? 'bg-emerald-500/10 border-2 border-emerald-500/50 ring-1 ring-emerald-500/20'
-                : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
+              !isLive ? 'bg-emerald-500/10 border-2 border-emerald-500/50' : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
             }`}
           >
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-lg">📊</span>
-              <span className={`text-sm font-semibold ${tradingMode === 'demo' ? 'text-emerald-400' : 'text-gray-400'}`}>
-                Demo Mode
-              </span>
-            </div>
-            <p className="text-xs text-gray-500">Paper trading only. No real money at risk. Bets are simulated and tracked.</p>
+            <span className={`text-sm font-bold ${!isLive ? 'text-emerald-400' : 'text-gray-400'}`}>Demo Mode</span>
+            <p className="text-xs text-gray-500 mt-1">Paper trade, learn from results, backtest strategies. No real money.</p>
+            <p className="text-[10px] text-gray-600 mt-2">The system learns from every demo bet to improve its live predictions.</p>
           </button>
 
           <button
-            onClick={() => handleModeChange('live')}
+            onClick={() => set('woods_mode', 'live')}
             className={`rounded-lg p-4 text-left transition-all ${
-              tradingMode === 'live'
-                ? 'bg-red-500/10 border-2 border-red-500/50 ring-1 ring-red-500/20'
-                : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
+              isLive ? 'bg-red-500/10 border-2 border-red-500/50' : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
             }`}
           >
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-lg">💰</span>
-              <span className={`text-sm font-semibold ${tradingMode === 'live' ? 'text-red-400' : 'text-gray-400'}`}>
-                Live Trading
-              </span>
-            </div>
-            <p className="text-xs text-gray-500">Real bets placed on Betfair Exchange. Requires funded account and API key.</p>
+            <span className={`text-sm font-bold ${isLive ? 'text-red-400' : 'text-gray-400'}`}>Live Trading</span>
+            <p className="text-xs text-gray-500 mt-1">Real bets on Betfair Exchange. Uses model refined from demo results.</p>
+            <p className="text-[10px] text-gray-600 mt-2">Applies all risk limits below. Requires funded Betfair account.</p>
           </button>
         </div>
 
-        {tradingMode === 'live' && (
-          <div className="mt-3 space-y-3">
-            <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3">
-              <p className="text-xs text-red-400 font-medium">
-                ⚠️ Live mode will place real bets with real money on Betfair. Ensure your account is funded and API credentials are configured.
-              </p>
-            </div>
-
-            {/* Live Bet Configuration */}
-            <div className="rounded-lg bg-gray-800 p-4 space-y-3">
-              <h4 className="text-xs font-semibold text-gray-300">Live Bet Configuration</h4>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-400">Live Bet Size</p>
-                  <p className="text-[10px] text-gray-600">Fixed amount per live bet on Betfair</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {[50, 100, 200, 500].map(amt => (
-                    <button
-                      key={amt}
-                      onClick={() => {
-                        setLocal(prev => ({ ...prev, live_bet_size: amt }))
-                        setDirty(prev => new Set(prev).add('live_bet_size'))
-                      }}
-                      className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
-                        (local['live_bet_size'] as number || 100) === amt
-                          ? 'bg-red-600 text-white'
-                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                      }`}
-                    >
-                      ${amt}
-                    </button>
-                  ))}
-                  <input
-                    type="number"
-                    value={(local['live_bet_size'] as number) || 100}
-                    onChange={e => {
-                      const v = parseInt(e.target.value)
-                      if (!isNaN(v) && v >= 1) {
-                        setLocal(prev => ({ ...prev, live_bet_size: v }))
-                        setDirty(prev => new Set(prev).add('live_bet_size'))
-                      }
-                    }}
-                    className="w-20 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs font-mono text-white text-right"
-                    min={1}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-400">Max Daily Live Bets</p>
-                  <p className="text-[10px] text-gray-600">Maximum number of live bets per day</p>
-                </div>
-                <input
-                  type="number"
-                  value={(local['max_daily_live_bets'] as number) || 10}
-                  onChange={e => {
-                    const v = parseInt(e.target.value)
-                    if (!isNaN(v) && v >= 1) {
-                      setLocal(prev => ({ ...prev, max_daily_live_bets: v }))
-                      setDirty(prev => new Set(prev).add('max_daily_live_bets'))
-                    }
-                  }}
-                  className="w-20 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs font-mono text-white text-right"
-                  min={1}
-                  max={50}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-400">Min Edge for Live</p>
-                  <p className="text-[10px] text-gray-600">Only mirror bets with edge above this %</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    value={Math.round(((local['min_live_edge'] as number) || 0.05) * 100)}
-                    onChange={e => {
-                      const v = parseInt(e.target.value)
-                      if (!isNaN(v) && v >= 1 && v <= 100) {
-                        setLocal(prev => ({ ...prev, min_live_edge: v / 100 }))
-                        setDirty(prev => new Set(prev).add('min_live_edge'))
-                      }
-                    }}
-                    className="w-16 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs font-mono text-white text-right"
-                    min={1}
-                    max={100}
-                  />
-                  <span className="text-xs text-gray-500">%</span>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-gray-700">
-                <p className="text-[10px] text-gray-500">
-                  Betfair balance: $2,500 AUD | Commission: 5% | App key: mbbTz...NoOl (delay)
-                </p>
-              </div>
-            </div>
+        {isLive && (
+          <div className="mt-3 rounded-lg bg-red-500/10 border border-red-500/30 p-3">
+            <p className="text-xs text-red-400 font-medium">
+              Live mode places real bets with real money. All risk limits and stop-losses are enforced.
+            </p>
           </div>
-        )}
-
-        {dirty.has('woods_mode') && (
-          <p className="mt-2 text-xs text-cyan-400">* Mode change pending — click Save Changes to apply</p>
         )}
       </div>
 
-      {/* Auto-Scan Toggle */}
+      {/* ================================================================= */}
+      {/* STEP 2: SPORTS — Select which sports to scan                      */}
+      {/* ================================================================= */}
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-300">Autonomous Auto-Scan</h3>
-            <p className="text-xs text-gray-500 mt-1">
-              Automatically scan markets and place best bets daily (min 4 bets/day when enabled)
-            </p>
-          </div>
+        <div className="flex items-center gap-3 mb-4">
+          <span className="rounded-full bg-gray-800 px-2.5 py-1 text-[10px] font-bold text-gray-400">STEP 2</span>
+          <h3 className="text-sm font-bold text-white">Active Sports</h3>
           <button
-            onClick={() => handleAutoScanToggle(!autoScanEnabled)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              autoScanEnabled ? 'bg-cyan-600' : 'bg-gray-700'
-            }`}
-          >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              autoScanEnabled ? 'translate-x-6' : 'translate-x-1'
-            }`} />
-          </button>
+            onClick={selectAllSports}
+            className="ml-auto rounded px-2.5 py-1 text-[10px] font-bold bg-gray-800 text-gray-400 hover:bg-gray-700 transition-colors"
+          >Select All</button>
         </div>
-        {autoScanEnabled && (
-          <p className="mt-2 text-xs text-cyan-400">
-            Auto-scan is enabled. The system will scan all active sports and place qualifying bets autonomously.
-          </p>
-        )}
+
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {SPORTS.map(s => {
+            const active = activeSports.includes(s.key)
+            return (
+              <button
+                key={s.key}
+                onClick={() => toggleSport(s.key)}
+                className={`rounded-lg p-3 text-left transition-all ${
+                  active ? 'bg-cyan-500/10 border-2 border-cyan-500/50' : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm font-bold ${active ? 'text-cyan-400' : 'text-gray-500'}`}>{s.label}</span>
+                  <div className={`h-3 w-3 rounded-full ${active ? 'bg-cyan-400' : 'bg-gray-700'}`} />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        <p className="text-[10px] text-gray-600 mt-3">
+          {activeSports.length === 0 ? 'No sports selected — select at least one' :
+           activeSports.length === SPORTS.length ? 'All sports active — system will scan across all markets' :
+           `${activeSports.length} sport${activeSports.length > 1 ? 's' : ''} active`}
+        </p>
       </div>
 
-      {/* Live Mirror */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-300">Auto-Mirror to Betfair</h3>
-            <p className="text-xs text-gray-500 mt-1">
-              Automatically place a live bet on Betfair mirroring each demo bet at a percentage of the demo stake
-            </p>
+      {/* ================================================================= */}
+      {/* STEP 3: MODE — Autonomous or Manual                               */}
+      {/* ================================================================= */}
+      <div className="rounded-xl border-2 border-gray-700 bg-gray-900 p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <span className="rounded-full bg-gray-800 px-2.5 py-1 text-[10px] font-bold text-gray-400">STEP 3</span>
+          <h3 className="text-sm font-bold text-white">Operation Mode</h3>
+          <div className={`ml-auto px-3 py-1 rounded-full text-xs font-bold ${
+            isAutonomous ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'bg-gray-700 text-gray-400 border border-gray-600'
+          }`}>
+            {isAutonomous ? 'AUTONOMOUS' : 'MANUAL'}
           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => {
-              const current = (local['auto_mirror_enabled'] as boolean) ?? false
-              setLocal(prev => ({ ...prev, auto_mirror_enabled: !current }))
-              setDirty(prev => new Set(prev).add('auto_mirror_enabled'))
-            }}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              (local['auto_mirror_enabled'] as boolean) ? 'bg-cyan-600' : 'bg-gray-700'
+            onClick={() => set('scan_mode', 'autonomous')}
+            className={`rounded-lg p-4 text-left transition-all ${
+              isAutonomous ? 'bg-cyan-500/10 border-2 border-cyan-500/50' : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
             }`}
           >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              (local['auto_mirror_enabled'] as boolean) ? 'translate-x-6' : 'translate-x-1'
-            }`} />
+            <span className={`text-sm font-bold ${isAutonomous ? 'text-cyan-400' : 'text-gray-400'}`}>Autonomous</span>
+            <p className="text-xs text-gray-500 mt-1">System scans, selects, and places bets automatically — like Alan Woods.</p>
+            <p className="text-[10px] text-gray-600 mt-2">Runs on schedule. Self-improves from backtesting results. Fully hands-off.</p>
+          </button>
+
+          <button
+            onClick={() => set('scan_mode', 'manual')}
+            className={`rounded-lg p-4 text-left transition-all ${
+              !isAutonomous ? 'bg-cyan-500/10 border-2 border-cyan-500/50' : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
+            }`}
+          >
+            <span className={`text-sm font-bold ${!isAutonomous ? 'text-cyan-400' : 'text-gray-400'}`}>Manual</span>
+            <p className="text-xs text-gray-500 mt-1">You scan from the Planner, review each bet, and approve before placement.</p>
+            <p className="text-[10px] text-gray-600 mt-2">Full control over every bet. Use the Planner tab to manage.</p>
           </button>
         </div>
 
-        {(local['auto_mirror_enabled'] as boolean) && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-gray-800">
+        {/* Autonomous sub-settings */}
+        {isAutonomous && (
+          <div className="mt-4 space-y-4 rounded-lg bg-gray-800/50 p-4 border border-gray-700">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-400">Mirror Percentage</p>
-                <p className="text-[10px] text-gray-600">% of demo bet size placed as live bet (e.g. 20% of $500 = $100 live)</p>
+                <p className="text-xs text-gray-300 font-medium">Auto-Scan Enabled</p>
+                <p className="text-[10px] text-gray-600">Automatically scan markets on schedule</p>
               </div>
+              <Toggle enabled={autoScanEnabled} onChange={v => set('auto_scan_enabled', v)} />
+            </div>
+
+            <div>
+              <p className="text-xs text-gray-300 font-medium mb-2">Scan Frequency</p>
               <div className="flex items-center gap-2">
-                {[10, 20, 50, 100].map(pct => (
+                {[
+                  { key: 'hourly', label: 'Every Hour' },
+                  { key: 'twice_daily', label: 'Twice Daily' },
+                  { key: 'daily', label: 'Daily' },
+                  { key: 'weekly', label: 'Weekly' },
+                ].map(f => (
                   <button
-                    key={pct}
-                    onClick={() => {
-                      setLocal(prev => ({ ...prev, mirror_pct: pct }))
-                      setDirty(prev => new Set(prev).add('mirror_pct'))
-                    }}
-                    className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
-                      (local['mirror_pct'] as number || 20) === pct
-                        ? 'bg-cyan-600 text-white'
-                        : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                    key={f.key}
+                    onClick={() => set('scan_frequency', f.key)}
+                    className={`rounded px-3 py-1.5 text-xs font-bold transition-colors ${
+                      scanFrequency === f.key ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                     }`}
-                  >
-                    {pct}%
-                  </button>
+                  >{f.label}</button>
                 ))}
-                <input
-                  type="number"
-                  value={(local['mirror_pct'] as number) || 20}
-                  onChange={e => {
-                    const v = parseInt(e.target.value)
-                    if (!isNaN(v) && v >= 1 && v <= 100) {
-                      setLocal(prev => ({ ...prev, mirror_pct: v }))
-                      setDirty(prev => new Set(prev).add('mirror_pct'))
-                    }
-                  }}
-                  className="w-16 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs font-mono text-white text-right"
-                  min={1}
-                  max={100}
-                />
-                <span className="text-xs text-gray-500">%</span>
               </div>
             </div>
 
-            <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+            <div className="rounded-lg bg-cyan-500/10 border border-cyan-500/30 p-3">
               <p className="text-xs text-cyan-400">
-                Every demo bet of $500 will also place a $
-                {Math.round(500 * ((local['mirror_pct'] as number || 20) / 100))} live bet on Betfair Exchange.
-                Your Betfair balance: $2,500 AUD.
+                {autoScanEnabled
+                  ? `System will scan ${activeSports.length} sport${activeSports.length !== 1 ? 's' : ''} ${scanFrequency === 'hourly' ? 'every hour' : scanFrequency === 'twice_daily' ? 'at 6am and 12pm AEST' : scanFrequency === 'daily' ? 'at 6am AEST' : 'every Monday'}, find overlay bets, and ${isLive ? 'place them on Betfair' : 'paper-trade them in demo mode'} within your risk limits.`
+                  : 'Enable auto-scan to run the system autonomously.'}
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Scan Mode: Autonomous vs Manual */}
+      {/* ================================================================= */}
+      {/* STEP 4: BET SIZING — Sliders for per-bet and daily budget          */}
+      {/* ================================================================= */}
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-3">Scan Mode</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => handleScanModeChange('autonomous')}
-            className={`rounded-lg p-3 text-left transition-all ${
-              scanMode === 'autonomous'
-                ? 'bg-cyan-500/10 border-2 border-cyan-500/50'
-                : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
-            }`}
-          >
-            <span className={`text-sm font-semibold ${scanMode === 'autonomous' ? 'text-cyan-400' : 'text-gray-400'}`}>
-              🤖 Autonomous
-            </span>
-            <p className="text-xs text-gray-500 mt-1">System scans and places bets automatically on schedule</p>
-          </button>
-          <button
-            onClick={() => handleScanModeChange('manual')}
-            className={`rounded-lg p-3 text-left transition-all ${
-              scanMode === 'manual'
-                ? 'bg-cyan-500/10 border-2 border-cyan-500/50'
-                : 'bg-gray-800 border-2 border-gray-700 hover:border-gray-600'
-            }`}
-          >
-            <span className={`text-sm font-semibold ${scanMode === 'manual' ? 'text-cyan-400' : 'text-gray-400'}`}>
-              👤 Manual
-            </span>
-            <p className="text-xs text-gray-500 mt-1">You click Scan Now and approve each bet before placement</p>
-          </button>
+        <div className="flex items-center gap-3 mb-5">
+          <span className="rounded-full bg-gray-800 px-2.5 py-1 text-[10px] font-bold text-gray-400">STEP 4</span>
+          <h3 className="text-sm font-bold text-white">Bet Sizing</h3>
         </div>
-      </div>
 
-      {/* Risk Management */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">Risk Management</h3>
-        <div className="space-y-4">
-          {/* Bankroll Limit */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400">Bankroll Limit</p>
-              <p className="text-[10px] text-gray-600 mt-0.5">Maximum total bankroll for betting. System stops when reached.</p>
+        <div className="space-y-6">
+          {/* Bankroll */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-xs text-gray-300 font-medium">Bankroll</p>
+                <p className="text-[10px] text-gray-600">Total capital available for betting</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">$</span>
-              <input
-                type="number"
-                value={typeof local['bankroll_limit'] === 'number' ? local['bankroll_limit'] : 10000}
-                onChange={e => {
-                  const v = parseFloat(e.target.value)
-                  if (!isNaN(v) && v >= 0) {
-                    setLocal(prev => ({ ...prev, bankroll_limit: v }))
-                    setDirty(prev => new Set(prev).add('bankroll_limit'))
-                  }
-                }}
-                className="w-28 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-right text-sm font-mono text-white focus:border-cyan-500 focus:outline-none"
-                step={500}
-                min={0}
-                max={100000}
-              />
-            </div>
+            <Slider
+              value={bankroll}
+              min={100}
+              max={25000}
+              step={100}
+              onChange={v => set('starting_bankroll', v)}
+              prefix="$"
+              presets={[500, 1000, 2500, 5000, 10000]}
+            />
           </div>
 
-          {/* Max Daily Spend */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400">Max Daily Spend</p>
-              <p className="text-[10px] text-gray-600 mt-0.5">Maximum total stake per day across all bets</p>
+          {/* Daily Budget */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-xs text-gray-300 font-medium">Daily Budget</p>
+                <p className="text-[10px] text-gray-600">Maximum total stake per day across all bets ({((dailyBudget / bankroll) * 100).toFixed(1)}% of bankroll)</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">$</span>
-              <input
-                type="number"
-                value={typeof local['daily_limit'] === 'number' ? local['daily_limit'] : 2000}
-                onChange={e => {
-                  const v = parseFloat(e.target.value)
-                  if (!isNaN(v) && v >= 0) {
-                    setLocal(prev => ({ ...prev, daily_limit: v }))
-                    setDirty(prev => new Set(prev).add('daily_limit'))
-                  }
-                }}
-                className="w-28 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-right text-sm font-mono text-white focus:border-cyan-500 focus:outline-none"
-                step={100}
-                min={0}
-                max={50000}
-              />
-            </div>
+            <Slider
+              value={dailyBudget}
+              min={10}
+              max={Math.min(5000, bankroll)}
+              step={10}
+              onChange={v => set('daily_limit', v)}
+              prefix="$"
+              presets={[50, 100, 250, 500, 1000]}
+            />
           </div>
 
           {/* Max Single Bet */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400">Max Single Bet</p>
-              <p className="text-[10px] text-gray-600 mt-0.5">Maximum stake on any single bet</p>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-xs text-gray-300 font-medium">Max Single Bet</p>
+                <p className="text-[10px] text-gray-600">Maximum stake on any individual bet</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">$</span>
-              <input
-                type="number"
-                value={typeof local['max_single_bet'] === 'number' ? local['max_single_bet'] : 500}
-                onChange={e => {
-                  const v = parseFloat(e.target.value)
-                  if (!isNaN(v) && v >= 0) {
-                    setLocal(prev => ({ ...prev, max_single_bet: v }))
-                    setDirty(prev => new Set(prev).add('max_single_bet'))
-                  }
-                }}
-                className="w-28 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-right text-sm font-mono text-white focus:border-cyan-500 focus:outline-none"
-                step={50}
-                min={0}
-                max={10000}
-              />
-            </div>
+            <Slider
+              value={maxSingleBet}
+              min={5}
+              max={Math.min(1000, dailyBudget)}
+              step={5}
+              onChange={v => set('max_single_bet', v)}
+              prefix="$"
+              presets={[10, 25, 50, 100, 200, 500]}
+            />
           </div>
 
-          {/* Stop Loss */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400">Daily Stop Loss</p>
-              <p className="text-[10px] text-gray-600 mt-0.5">Stop placing bets if daily losses exceed this amount</p>
+          {/* Daily Stop Loss */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-xs text-gray-300 font-medium">Daily Stop Loss</p>
+                <p className="text-[10px] text-gray-600">Stop all betting if daily losses exceed this</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">$</span>
-              <input
-                type="number"
-                value={typeof local['daily_stop_loss'] === 'number' ? local['daily_stop_loss'] : 1000}
-                onChange={e => {
-                  const v = parseFloat(e.target.value)
-                  if (!isNaN(v) && v >= 0) {
-                    setLocal(prev => ({ ...prev, daily_stop_loss: v }))
-                    setDirty(prev => new Set(prev).add('daily_stop_loss'))
-                  }
-                }}
-                className="w-28 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-right text-sm font-mono text-white focus:border-cyan-500 focus:outline-none"
-                step={100}
-                min={0}
-                max={25000}
-              />
+            <Slider
+              value={dailyStopLoss}
+              min={50}
+              max={Math.min(5000, bankroll * 0.5)}
+              step={50}
+              onChange={v => set('daily_stop_loss', v)}
+              prefix="$"
+              presets={[100, 250, 500, 1000]}
+            />
+          </div>
+
+          {/* Summary */}
+          <div className="rounded-lg bg-gray-800 p-4 grid grid-cols-4 gap-3">
+            <div>
+              <span className="text-[10px] text-gray-500 block">Bankroll</span>
+              <span className="text-sm font-mono font-bold text-white">${bankroll.toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 block">Daily Budget</span>
+              <span className="text-sm font-mono font-bold text-cyan-400">${dailyBudget.toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 block">Max Bet</span>
+              <span className="text-sm font-mono font-bold text-white">${maxSingleBet}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 block">Stop Loss</span>
+              <span className="text-sm font-mono font-bold text-red-400">-${dailyStopLoss}</span>
             </div>
           </div>
         </div>
-
-        {tradingMode === 'live' && (
-          <div className="mt-3 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2">
-            <p className="text-[10px] text-amber-400">These limits apply to live Betfair trading. The system will halt if any limit is reached.</p>
-          </div>
-        )}
       </div>
 
-      {/* Horse Racing Settings */}
+      {/* ================================================================= */}
+      {/* STEP 5: MODEL TUNING — Kelly, edge thresholds, W.E.               */}
+      {/* ================================================================= */}
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">🏇 Horse Racing — Autonomous Betting</h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400">Bet Size (per race)</p>
-              <p className="text-[10px] text-gray-600">Fixed stake on each overlay bet</p>
+        <div className="flex items-center gap-3 mb-5">
+          <span className="rounded-full bg-gray-800 px-2.5 py-1 text-[10px] font-bold text-gray-400">STEP 5</span>
+          <h3 className="text-sm font-bold text-white">Model Tuning</h3>
+        </div>
+
+        <div className="space-y-5">
+          {/* Kelly Fraction */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-xs text-gray-300 font-medium">Kelly Fraction</p>
+                <p className="text-[10px] text-gray-600">Fraction of full Kelly to use (0.25 = quarter-Kelly, safer)</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {[10, 20, 50, 100].map(amt => (
-                <button
-                  key={amt}
-                  onClick={() => {
-                    setLocal(prev => ({ ...prev, racing_bet_size: amt }))
-                    setDirty(prev => new Set(prev).add('racing_bet_size'))
-                  }}
-                  className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
-                    (local['racing_bet_size'] as number || 20) === amt
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                  }`}
-                >
-                  ${amt}
-                </button>
-              ))}
-            </div>
+            <Slider
+              value={Math.round(kellyFraction * 100)}
+              min={5}
+              max={100}
+              step={5}
+              onChange={v => set('kelly_fraction', v / 100)}
+              suffix="%"
+              presets={[10, 25, 50, 100]}
+            />
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400">Max Bets Per Day</p>
-              <p className="text-[10px] text-gray-600">Top N overlays by W.E. placed daily</p>
+          {/* Min Edge */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-xs text-gray-300 font-medium">Minimum Edge</p>
+                <p className="text-[10px] text-gray-600">Only bet when model edge exceeds this %</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {[4, 6, 8, 10, 15].map(n => (
-                <button
-                  key={n}
-                  onClick={() => {
-                    setLocal(prev => ({ ...prev, racing_max_daily_bets: n }))
-                    setDirty(prev => new Set(prev).add('racing_max_daily_bets'))
-                  }}
-                  className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
-                    (local['racing_max_daily_bets'] as number || 6) === n
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
+            <Slider
+              value={Math.round(minEdge * 100)}
+              min={1}
+              max={15}
+              step={1}
+              onChange={v => set('min_edge_threshold', v / 100)}
+              suffix="%"
+              presets={[2, 3, 5, 8, 10]}
+            />
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400">Min W.E. Threshold</p>
-              <p className="text-[10px] text-gray-600">Only bet on overlays with W.E.(net) above this</p>
+          {/* Min W.E. for Racing */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-xs text-gray-300 font-medium">Min W.E. (Racing)</p>
+                <p className="text-[10px] text-gray-600">Win Expectation threshold for horse racing overlays</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {[1.02, 1.05, 1.08, 1.10].map(we => (
-                <button
-                  key={we}
-                  onClick={() => {
-                    setLocal(prev => ({ ...prev, racing_min_we: we }))
-                    setDirty(prev => new Set(prev).add('racing_min_we'))
-                  }}
-                  className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
-                    (local['racing_min_we'] as number || 1.05) === we
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                  }`}
-                >
-                  {we.toFixed(2)}
-                </button>
-              ))}
-            </div>
+            <Slider
+              value={Math.round(racingMinWe * 100) / 100}
+              min={1.0}
+              max={1.20}
+              step={0.01}
+              onChange={v => set('racing_min_we', v)}
+              presets={[1.02, 1.05, 1.08, 1.10]}
+            />
           </div>
 
-          <div className="flex items-center justify-between">
+          {/* Commission */}
+          <div className="flex items-center justify-between rounded-lg bg-gray-800 p-3">
             <div>
-              <p className="text-xs text-gray-400">Min Liquidity</p>
-              <p className="text-[10px] text-gray-600">Only bet when Betfair has this much available to back</p>
+              <p className="text-xs text-gray-300 font-medium">Betfair Commission</p>
+              <p className="text-[10px] text-gray-600">Deducted from winnings</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">$</span>
-              <input
-                type="number"
-                value={(local['racing_min_liquidity'] as number) || 50}
-                onChange={e => {
-                  const v = parseInt(e.target.value)
-                  if (!isNaN(v) && v >= 10) {
-                    setLocal(prev => ({ ...prev, racing_min_liquidity: v }))
-                    setDirty(prev => new Set(prev).add('racing_min_liquidity'))
-                  }
-                }}
-                className="w-20 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs font-mono text-white text-right"
-                min={10}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400">Bet Types</p>
-              <p className="text-[10px] text-gray-600">Which markets to bet on</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {['Win', 'Place', 'Both'].map(bt => (
-                <button
-                  key={bt}
-                  onClick={() => {
-                    setLocal(prev => ({ ...prev, racing_bet_type: bt.toLowerCase() }))
-                    setDirty(prev => new Set(prev).add('racing_bet_type'))
-                  }}
-                  className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
-                    (local['racing_bet_type'] as string || 'win') === bt.toLowerCase()
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                  }`}
-                >
-                  {bt}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
-            <p className="text-xs text-emerald-400">
-              Daily exposure: ${((local['racing_bet_size'] as number || 20) * (local['racing_max_daily_bets'] as number || 6)).toLocaleString()} max
-              ({local['racing_max_daily_bets'] as number || 6} bets × ${local['racing_bet_size'] as number || 20} each)
-            </p>
+            <span className="text-sm font-mono font-bold text-white">{((get<number>('commission_rate', 0.05)) * 100).toFixed(1)}%</span>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <SettingsSection title="Kelly & Sizing" fields={KELLY_FIELDS} values={local} onChange={handleChange} dirty={dirty} />
-        <SettingsSection title="Thresholds" fields={THRESHOLD_FIELDS} values={local} onChange={handleChange} dirty={dirty} />
-        <SettingsSection title="Commission" fields={COMMISSION_FIELDS} values={local} onChange={handleChange} dirty={dirty} />
+      {/* ================================================================= */}
+      {/* SELF-IMPROVEMENT — How the system learns                           */}
+      {/* ================================================================= */}
+      <div className="rounded-xl border-2 border-cyan-500/30 bg-cyan-500/5 p-5">
+        <h3 className="text-sm font-bold text-white mb-3">Self-Improvement Engine</h3>
+        <p className="text-xs text-gray-400 mb-4">
+          Like the original Alan Woods system, this engine continuously learns and improves from every bet placed.
+        </p>
 
-        {/* Active Sports */}
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-          <h3 className="mb-4 text-sm font-semibold text-gray-300">Active Sports</h3>
-          <div className="space-y-3">
-            {ALL_SPORTS.map(([key, label]) => (
-              <label key={key} className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={activeSports.includes(key)}
-                  onChange={e => handleSportsChange(key, e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0"
-                />
-                <span className="text-sm text-gray-300">{label}</span>
-                <span className="text-xs text-gray-600">{key}</span>
-              </label>
-            ))}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg bg-gray-900 border border-gray-800 p-3">
+            <span className="text-[10px] text-gray-500 block mb-1">Demo Backtesting</span>
+            <p className="text-xs text-gray-300">Every demo bet tests the model against real outcomes. Win rate, edge accuracy, and Kelly sizing are tracked to calibrate the live model.</p>
+          </div>
+          <div className="rounded-lg bg-gray-900 border border-gray-800 p-3">
+            <span className="text-[10px] text-gray-500 block mb-1">Live Feedback Loop</span>
+            <p className="text-xs text-gray-300">Live results feed back into the model. Factors like jockey/trainer success rates, barrier stats, and form weights are adjusted over time.</p>
+          </div>
+          <div className="rounded-lg bg-gray-900 border border-gray-800 p-3">
+            <span className="text-[10px] text-gray-500 block mb-1">Risk Adaptation</span>
+            <p className="text-xs text-gray-300">The system adjusts Kelly fraction and bet sizing based on recent variance. Reduces exposure during losing runs, increases during validated edges.</p>
           </div>
         </div>
 
-        {/* Betfair Connection Status */}
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-          <h3 className="mb-4 text-sm font-semibold text-gray-300">Betfair Exchange</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">Account</span>
-              <span className="text-xs font-mono text-gray-300">trdickinson</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">App Key</span>
-              <span className="text-xs font-mono text-gray-300">mbbTz...NoOl (delay)</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">Status</span>
-              <span className="text-xs text-emerald-400 font-medium">Connected</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">Commission</span>
-              <span className="text-xs text-gray-300">5%</span>
-            </div>
+        <div className="mt-4 rounded-lg bg-gray-900 border border-gray-800 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-400">Learning Pipeline</span>
+            <span className="text-[10px] text-gray-600">Demo bets &rarr; Backtest &rarr; Calibrate &rarr; Live model &rarr; Live bets &rarr; Results &rarr; Refine</span>
           </div>
         </div>
       </div>
-    </div>
-  )
-}
 
-function SettingsSection({
-  title,
-  fields,
-  values,
-  onChange,
-  dirty,
-}: {
-  title: string
-  fields: SettingField[]
-  values: Record<string, unknown>
-  onChange: (key: string, value: number) => void
-  dirty: Set<string>
-}) {
-  return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-      <h3 className="mb-4 text-sm font-semibold text-gray-300">{title}</h3>
-      <div className="space-y-4">
-        {fields.map(field => {
-          const rawValue = values[field.key]
-          const numValue = typeof rawValue === 'number' ? rawValue : Number(rawValue) || 0
-          const isDirty = dirty.has(field.key)
-
-          return (
-            <div key={field.key} className="flex items-center justify-between gap-4">
-              <div className="flex-1">
-                <label className="text-xs text-gray-400">
-                  {field.label}
-                  {isDirty && <span className="ml-1 text-cyan-400">*</span>}
-                </label>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={field.format === 'percent' ? (numValue * 100).toFixed(1) : numValue}
-                  onChange={e => {
-                    const v = parseFloat(e.target.value)
-                    if (isNaN(v)) return
-                    const actual = field.format === 'percent' ? v / 100 : v
-                    if (actual >= field.min && actual <= field.max) {
-                      onChange(field.key, actual)
-                    }
-                  }}
-                  className="w-24 rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-right text-sm font-mono text-white focus:border-cyan-500 focus:outline-none"
-                  step={field.format === 'percent' ? field.step * 100 : field.step}
-                />
-                <span className="w-6 text-xs text-gray-500">
-                  {field.format === 'percent' ? '%' : field.format === 'dollar' ? '$' : ''}
-                </span>
-              </div>
-            </div>
-          )
-        })}
+      {/* ================================================================= */}
+      {/* BETFAIR CONNECTION                                                 */}
+      {/* ================================================================= */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+        <h3 className="text-sm font-bold text-white mb-3">Betfair Exchange</h3>
+        <div className="grid grid-cols-4 gap-3">
+          <div className="rounded-lg bg-gray-800 p-3">
+            <span className="text-[10px] text-gray-500 block">Account</span>
+            <span className="text-xs font-mono text-gray-300">trdickinson</span>
+          </div>
+          <div className="rounded-lg bg-gray-800 p-3">
+            <span className="text-[10px] text-gray-500 block">App Key</span>
+            <span className="text-xs font-mono text-gray-300">mbbTz...NoOl</span>
+          </div>
+          <div className="rounded-lg bg-gray-800 p-3">
+            <span className="text-[10px] text-gray-500 block">Status</span>
+            <span className="text-xs text-emerald-400 font-bold">Connected</span>
+          </div>
+          <div className="rounded-lg bg-gray-800 p-3">
+            <span className="text-[10px] text-gray-500 block">Commission</span>
+            <span className="text-xs font-mono text-gray-300">5%</span>
+          </div>
+        </div>
       </div>
     </div>
   )
