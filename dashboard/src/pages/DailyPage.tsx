@@ -134,6 +134,49 @@ async function runRealBacktest(sport: string): Promise<BacktestResult[]> {
 }
 
 // ---------------------------------------------------------------------------
+// System status
+// ---------------------------------------------------------------------------
+
+async function fetchSystemStatus() {
+  const { data: configs } = await supabase
+    .from('system_config')
+    .select('key, value, updated_at')
+    .in('key', ['woods_mode', 'active_sports', 'auto_scan_enabled', 'activity_log', 'daily_strategy'])
+
+  const { count: overlayCount } = await supabase
+    .from('racing_overlays')
+    .select('*', { count: 'exact', head: true })
+
+  const { count: scanCount } = await supabase
+    .from('scan_results')
+    .select('*', { count: 'exact', head: true })
+
+  const { count: betCount } = await supabase
+    .from('bets')
+    .select('*', { count: 'exact', head: true })
+
+  const configMap: Record<string, { value: unknown; updated_at: string }> = {}
+  for (const c of configs || []) {
+    configMap[c.key] = { value: c.value, updated_at: c.updated_at }
+  }
+
+  // Parse activity log for last activity
+  const actLog = configMap.activity_log?.value as Array<{ ts: string; msg: string; type: string }> | null
+  const lastActivity = actLog && actLog.length > 0 ? actLog[actLog.length - 1] : null
+
+  return {
+    mode: (configMap.woods_mode?.value as string) || 'demo',
+    autoScan: configMap.auto_scan_enabled?.value as boolean,
+    activeSports: (configMap.active_sports?.value as string[]) || [],
+    overlayCount: overlayCount || 0,
+    scanCount: scanCount || 0,
+    betCount: betCount || 0,
+    lastActivity,
+    lastActivityTime: lastActivity?.ts || configMap.activity_log?.updated_at || null,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Data fetching
 // ---------------------------------------------------------------------------
 
@@ -219,6 +262,12 @@ export function DailyPage() {
   const [backtesting, setBacktesting] = useState(false)
   const [scanning, setScanning] = useState(false)
 
+  const { data: status } = useQuery({
+    queryKey: ['system_status'],
+    queryFn: fetchSystemStatus,
+    refetchInterval: 60000,
+  })
+
   const { data: overlays } = useQuery({
     queryKey: ['daily_overlays', strategy.sport],
     queryFn: () => fetchTodayOverlays(strategy.sport),
@@ -273,6 +322,66 @@ export function DailyPage() {
         <h2 className="text-xl font-bold text-white">Daily Strategy</h2>
         <p className="text-xs text-gray-500 mt-0.5">{today}</p>
       </div>
+
+      {/* ---- SYSTEM STATUS ---- */}
+      {status && (
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-white">System Status</h3>
+            <div className="flex items-center gap-2">
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                status.mode === 'live'
+                  ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                  : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+              }`}>{status.mode.toUpperCase()}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                status.autoScan
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                  : 'bg-gray-500/20 text-gray-400 border-gray-500/40'
+              }`}>{status.autoScan ? 'AUTO-SCAN ON' : 'AUTO-SCAN OFF'}</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            <div className="rounded-lg bg-gray-800 p-2.5">
+              <span className="text-[10px] text-gray-500 block">Racing Overlays</span>
+              <span className="text-sm font-mono font-bold text-white">{status.overlayCount}</span>
+            </div>
+            <div className="rounded-lg bg-gray-800 p-2.5">
+              <span className="text-[10px] text-gray-500 block">Scan Results</span>
+              <span className="text-sm font-mono font-bold text-white">{status.scanCount}</span>
+            </div>
+            <div className="rounded-lg bg-gray-800 p-2.5">
+              <span className="text-[10px] text-gray-500 block">Total Bets</span>
+              <span className="text-sm font-mono font-bold text-white">{status.betCount}</span>
+            </div>
+            <div className="rounded-lg bg-gray-800 p-2.5">
+              <span className="text-[10px] text-gray-500 block">Active Sports</span>
+              <span className="text-sm font-mono font-bold text-white">{status.activeSports.length}</span>
+            </div>
+          </div>
+          {status.lastActivity && (
+            <div className="mt-3 rounded-lg bg-gray-800/50 border border-gray-700 p-2.5 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] text-gray-500 block">Last Activity</span>
+                <span className="text-xs text-gray-300">{status.lastActivity.msg}</span>
+              </div>
+              <span className="text-[10px] text-gray-500">
+                {status.lastActivityTime ? new Date(status.lastActivityTime).toLocaleString('en-AU', {
+                  day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true
+                }) : '—'}
+              </span>
+            </div>
+          )}
+          {status.lastActivityTime && (Date.now() - new Date(status.lastActivityTime).getTime() > 24 * 60 * 60 * 1000) && (
+            <div className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2.5">
+              <p className="text-[10px] text-amber-400">
+                Runner hasn't reported activity in over 24 hours. It may need to be restarted on Railway.
+                Racing scans use Betfair directly and work independently. NBA/AFL/Soccer need the Odds API (quota may be exhausted).
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ---- STRATEGY BUILDER ---- */}
       <div className="rounded-xl border-2 border-cyan-500/30 bg-gray-900 p-6 space-y-6">
