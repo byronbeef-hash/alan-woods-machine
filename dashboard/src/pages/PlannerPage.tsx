@@ -647,8 +647,9 @@ export function PlannerPage() {
       {isLoading ? (
         <div className="flex h-32 items-center justify-center text-sm text-gray-500">Loading overlays...</div>
       ) : bets.length === 0 ? (
-        <div className="flex h-32 items-center justify-center rounded-xl border border-gray-800 bg-gray-900 text-sm text-gray-500">
-          Click "Scan Betfair" to find overlay bets for the next 48 hours
+        <div className="flex flex-col h-40 items-center justify-center rounded-xl border border-gray-800 bg-gray-900 text-sm text-gray-500 gap-3">
+          <p>No racing overlays found. Click "Scan Betfair" to scan all AU/NZ meetings.</p>
+          <p className="text-[10px] text-gray-600">The Python runner (on Railway) must be running to process scan requests. Overlays are refreshed each scan.</p>
         </div>
       ) : (
         <div className="space-y-2">
