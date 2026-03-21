@@ -57,39 +57,80 @@ const DEFAULT_STRATEGY: DailyStrategy = {
 }
 
 // ---------------------------------------------------------------------------
-// Simulated backtest (generates realistic results from model parameters)
+// Backtest from real scan_results + bets data
 // ---------------------------------------------------------------------------
 
-function simulateBacktest(strategy: DailyStrategy): BacktestResult[] {
-  const months: BacktestResult[] = []
-  const now = new Date()
+async function runRealBacktest(sport: string): Promise<BacktestResult[]> {
+  // Fetch all historical scan results for this sport
+  const { data: scans } = await supabase
+    .from('scan_results')
+    .select('created_at, edge, model_prob, odds_decimal, status, tier')
+    .eq('sport', sport === 'racing' ? 'horse_racing' : sport)
+    .order('created_at', { ascending: true })
 
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const monthLabel = d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })
+  // Fetch all settled bets
+  const { data: bets } = await supabase
+    .from('bets')
+    .select('created_at, result, pnl, odds_decimal, bet_size, sport')
+    .in('result', ['WIN', 'LOSS'])
+    .order('created_at', { ascending: true })
 
-    // Model parameters influence results
-    const baseBets = Math.round(strategy.maxBets * 22 * (0.7 + Math.random() * 0.6))
-    const baseWinRate = strategy.sport === 'racing' ? 0.28 + Math.random() * 0.12 : 0.52 + Math.random() * 0.08
-    const wins = Math.round(baseBets * baseWinRate)
-    const avgStake = strategy.dailyBudget / strategy.maxBets
-    const avgOdds = strategy.sport === 'racing' ? 3.5 + Math.random() * 2 : 1.8 + Math.random() * 0.4
-    const grossWinnings = wins * avgStake * (avgOdds - 1) * 0.95
-    const totalStaked = baseBets * avgStake
-    const pnl = grossWinnings - (baseBets - wins) * avgStake
-    const roi = totalStaked > 0 ? (pnl / totalStaked) * 100 : 0
+  const allItems = [
+    ...(scans || []).map(s => ({
+      date: s.created_at,
+      edge: s.edge,
+      modelProb: s.model_prob,
+      odds: s.odds_decimal,
+      tier: s.tier,
+      source: 'scan' as const,
+      pnl: 0,
+      win: false,
+    })),
+    ...(bets || []).map(b => ({
+      date: b.created_at,
+      edge: 0,
+      modelProb: 0,
+      odds: b.odds_decimal,
+      tier: '',
+      source: 'bet' as const,
+      pnl: b.pnl || 0,
+      win: b.result === 'WIN',
+    })),
+  ]
 
-    months.push({
-      month: monthLabel,
-      bets: baseBets,
+  if (allItems.length === 0) return []
+
+  // Group by month
+  const byMonth = new Map<string, typeof allItems>()
+  for (const item of allItems) {
+    const d = new Date(item.date)
+    const key = d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })
+    if (!byMonth.has(key)) byMonth.set(key, [])
+    byMonth.get(key)!.push(item)
+  }
+
+  const results: BacktestResult[] = []
+  for (const [month, items] of byMonth) {
+    const betItems = items.filter(i => i.source === 'bet')
+    const scanItems = items.filter(i => i.source === 'scan')
+    const totalItems = betItems.length + scanItems.length
+    const wins = betItems.filter(i => i.win).length
+    const pnl = betItems.reduce((s, i) => s + i.pnl, 0)
+    const totalStaked = betItems.length * 25 // approximate
+    const edges = [...scanItems.map(i => i.edge), ...betItems.map(i => i.edge)].filter(e => e > 0)
+    const bestEdge = edges.length > 0 ? Math.max(...edges) : 0
+
+    results.push({
+      month,
+      bets: totalItems,
       wins,
       pnl: Math.round(pnl * 100) / 100,
-      roi: Math.round(roi * 10) / 10,
-      bestWE: strategy.minWE + Math.random() * 0.15,
-      avgEdge: 3 + Math.random() * 5,
+      roi: totalStaked > 0 ? Math.round((pnl / totalStaked) * 1000) / 10 : 0,
+      bestWE: 1 + bestEdge,
+      avgEdge: edges.length > 0 ? edges.reduce((a, b) => a + b, 0) / edges.length * 100 : 0,
     })
   }
-  return months
+  return results
 }
 
 // ---------------------------------------------------------------------------
@@ -127,6 +168,7 @@ async function triggerDailyScan(strategy: DailyStrategy): Promise<void> {
 }
 
 async function fetchTodayOverlays(sport: string) {
+  // Try racing_overlays first for racing
   if (sport === 'racing') {
     const { data } = await supabase
       .from('racing_overlays')
@@ -134,16 +176,36 @@ async function fetchTodayOverlays(sport: string) {
       .in('verdict', ['OVERLAY', 'MARGINAL'])
       .order('we_net', { ascending: false })
       .limit(20)
-    return data || []
+    if (data && data.length > 0) return data
   }
-  const { data } = await supabase
-    .from('game_overlays')
+
+  // Try game_overlays for non-racing sports
+  if (sport !== 'racing') {
+    const { data } = await supabase
+      .from('game_overlays')
+      .select('*')
+      .eq('sport', sport)
+      .gt('edge_pct', 2)
+      .order('edge_pct', { ascending: false })
+      .limit(20)
+    if (data && data.length > 0) return data
+  }
+
+  // Fallback: check scan_results table (has NBA data)
+  const sportMap: Record<string, string> = {
+    racing: 'horse_racing',
+    basketball_nba: 'basketball_nba',
+    aussierules_afl: 'aussierules_afl',
+    soccer_epl: 'soccer_epl',
+  }
+  const { data: scanData } = await supabase
+    .from('scan_results')
     .select('*')
-    .eq('sport', sport)
-    .gt('edge_pct', 2)
-    .order('edge_pct', { ascending: false })
+    .eq('sport', sportMap[sport] || sport)
+    .in('status', ['ACTIVE', 'PLACED', 'EXPIRED'])
+    .order('edge', { ascending: false })
     .limit(20)
-  return data || []
+  return scanData || []
 }
 
 // ---------------------------------------------------------------------------
@@ -156,13 +218,11 @@ export function DailyPage() {
   const [backtestResults, setBacktestResults] = useState<BacktestResult[] | null>(null)
   const [backtesting, setBacktesting] = useState(false)
   const [scanning, setScanning] = useState(false)
-  const [scanned, setScanned] = useState(false)
 
   const { data: overlays } = useQuery({
     queryKey: ['daily_overlays', strategy.sport],
     queryFn: () => fetchTodayOverlays(strategy.sport),
     refetchInterval: 30000,
-    enabled: scanned,
   })
 
   const scanMutation = useMutation({
@@ -172,23 +232,25 @@ export function DailyPage() {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['daily_overlays'] })
         setScanning(false)
-        setScanned(true)
       }, 10000)
     },
   })
 
-  const runBacktest = () => {
+  const runBacktest = async () => {
     setBacktesting(true)
-    // Simulate async backtest
-    setTimeout(() => {
-      setBacktestResults(simulateBacktest(strategy))
+    try {
+      const results = await runRealBacktest(strategy.sport)
+      setBacktestResults(results)
+    } catch (err) {
+      console.error('Backtest failed:', err)
+      setBacktestResults([])
+    } finally {
       setBacktesting(false)
-    }, 2000)
+    }
   }
 
   const update = <K extends keyof DailyStrategy>(key: K, value: DailyStrategy[K]) => {
     setStrategy(prev => ({ ...prev, [key]: value }))
-    setScanned(false)
     setBacktestResults(null)
   }
 
@@ -383,7 +445,7 @@ export function DailyPage() {
               disabled={scanning || scanMutation.isPending}
               className="flex-1 rounded-lg bg-cyan-600 py-3 text-sm font-bold text-white transition-colors hover:bg-cyan-500 disabled:opacity-50"
             >
-              {scanning ? 'Scanning...' : scanned ? 'Re-Scan Markets' : 'Scan & Find Bets'}
+              {scanning ? 'Scanning...' : results.length > 0 ? 'Re-Scan Markets' : 'Scan & Find Bets'}
             </button>
 
             <button
@@ -391,7 +453,7 @@ export function DailyPage() {
               disabled={backtesting}
               className="flex-1 rounded-lg bg-gray-700 py-3 text-sm font-bold text-white transition-colors hover:bg-gray-600 disabled:opacity-50"
             >
-              {backtesting ? 'Running 12-Month Backtest...' : 'Backtest 12 Months'}
+              {backtesting ? 'Analysing Historical Data...' : 'Backtest History'}
             </button>
           </div>
         </div>
@@ -401,7 +463,7 @@ export function DailyPage() {
       {backtestResults && (
         <div className="rounded-xl border border-gray-800 bg-gray-900 p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white">12-Month Backtest Results</h3>
+            <h3 className="text-sm font-bold text-white">Historical Backtest Results</h3>
             <span className="text-[10px] text-gray-500">{sportInfo?.label} / {strategy.mode} / ${strategy.dailyBudget}/day</span>
           </div>
 
@@ -490,89 +552,103 @@ export function DailyPage() {
             </div>
           </div>
 
-          <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-3">
-            <p className="text-xs text-emerald-400">
-              Based on this backtest, the {sportInfo?.label} strategy with ${strategy.dailyBudget}/day budget would have
-              {totalBacktestPnl >= 0 ? ' generated' : ' lost'}
-              {' '}${Math.abs(totalBacktestPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })} over 12 months
-              ({avgRoi >= 0 ? '+' : ''}{avgRoi.toFixed(1)}% avg monthly ROI).
-              {totalBacktestPnl > 0 ? ' Model shows positive expected value — ready for live deployment.' : ' Consider adjusting parameters.'}
+          <div className={`rounded-lg p-3 ${backtestResults.length > 0 ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-amber-500/10 border border-amber-500/30'}`}>
+            <p className={`text-xs ${backtestResults.length > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {backtestResults.length > 0 ? (
+                <>
+                  Based on {totalBacktestBets} real scans and bets for {sportInfo?.label}, the model has
+                  {totalBacktestPnl >= 0 ? ' generated' : ' lost'}
+                  {' '}${Math.abs(totalBacktestPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  {avgRoi !== 0 ? ` (${avgRoi >= 0 ? '+' : ''}${avgRoi.toFixed(1)}% avg ROI)` : ''}.
+                  {totalBacktestPnl > 0 ? ' Model shows positive expected value.' : ' More data needed for reliable results.'}
+                </>
+              ) : (
+                'No historical data found for this sport. Run scans and place bets to build backtesting history.'
+              )}
             </p>
           </div>
         </div>
       )}
 
       {/* ---- TODAY'S SCAN RESULTS ---- */}
-      {scanned && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white">Today's Opportunities</h3>
-            <span className="text-[10px] text-gray-500">{results.length} found</span>
-          </div>
-
-          {results.length === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-500">
-              {scanning ? 'Scanning markets...' : 'No overlay bets found yet. The runner will process your scan request shortly.'}
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-gray-800">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-gray-800/50 text-gray-500">
-                    <th className="px-3 py-2 text-left font-medium">Selection</th>
-                    <th className="px-3 py-2 text-left font-medium">Race/Game</th>
-                    <th className="px-3 py-2 text-right font-medium">Odds</th>
-                    <th className="px-3 py-2 text-right font-medium">Edge</th>
-                    <th className="px-3 py-2 text-right font-medium">W.E.</th>
-                    <th className="px-3 py-2 text-right font-medium">Model %</th>
-                    <th className="px-3 py-2 text-center font-medium">Tier</th>
-                    <th className="px-3 py-2 text-center font-medium">Verdict</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {results.slice(0, strategy.maxBets).map((r: Record<string, unknown>, i: number) => {
-                    const name = (r.name as string) || (r.selection as string) || '—'
-                    const race = (r.race as string) || (r.market as string) || '—'
-                    const back = (r.back_price as number) || (r.betfair_back as number) || 0
-                    const edge = ((r.edge as number) || (r.edge_pct as number) || 0)
-                    const edgePct = edge < 1 ? edge * 100 : edge
-                    const we = (r.we_net as number) || 0
-                    const modelProb = ((r.model_prob as number) || (r.implied_prob as number) || 0)
-                    const modelPct = modelProb < 1 ? modelProb * 100 : modelProb
-                    const tier = (r.tier as string) || '—'
-                    const verdict = (r.verdict as string) || '—'
-
-                    return (
-                      <tr key={i} className="border-t border-gray-800/50 hover:bg-gray-800/30">
-                        <td className="px-3 py-2 text-white font-medium">{name}</td>
-                        <td className="px-3 py-2 text-gray-400">{race}</td>
-                        <td className="px-3 py-2 text-right font-mono text-white">{back > 0 ? back.toFixed(2) : '—'}</td>
-                        <td className="px-3 py-2 text-right font-mono text-emerald-400">+{edgePct.toFixed(1)}%</td>
-                        <td className={`px-3 py-2 text-right font-mono font-bold ${we > 1.05 ? 'text-emerald-400' : we > 0 ? 'text-amber-400' : 'text-gray-500'}`}>
-                          {we > 0 ? we.toFixed(3) : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-cyan-400">{modelPct.toFixed(1)}%</td>
-                        <td className="px-3 py-2 text-center">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                            tier === 'STRONG' ? 'bg-emerald-500/20 text-emerald-400' :
-                            tier === 'MODERATE' ? 'bg-cyan-500/20 text-cyan-400' :
-                            'bg-amber-500/20 text-amber-400'
-                          }`}>{tier}</span>
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                            verdict === 'OVERLAY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                          }`}>{verdict}</span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-white">Today's Opportunities</h3>
+          <span className="text-[10px] text-gray-500">{results.length} found</span>
         </div>
-      )}
+
+        {results.length === 0 ? (
+          <div className="text-center py-8 text-sm text-gray-500">
+            {scanning ? 'Scanning markets...' : 'No overlay bets found. Click "Scan & Find Bets" to search, or wait for the runner to complete a scan.'}
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-gray-800">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-800/50 text-gray-500">
+                  <th className="px-3 py-2 text-left font-medium">Selection</th>
+                  <th className="px-3 py-2 text-left font-medium">Market / Race</th>
+                  <th className="px-3 py-2 text-right font-medium">Odds</th>
+                  <th className="px-3 py-2 text-right font-medium">Edge</th>
+                  <th className="px-3 py-2 text-right font-medium">Model %</th>
+                  <th className="px-3 py-2 text-center font-medium">Tier</th>
+                  <th className="px-3 py-2 text-center font-medium">Status</th>
+                  <th className="px-3 py-2 text-right font-medium">Kelly %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.slice(0, strategy.maxBets).map((r: Record<string, unknown>, i: number) => {
+                  // Handle both racing_overlays and scan_results field names
+                  const name = (r.name as string) || (r.player as string) || (r.selection as string) || '—'
+                  const market = (r.race as string) || (r.market as string) || (r.game_description as string) || '—'
+                  const odds = (r.back_price as number) || (r.odds_decimal as number) || 0
+                  const edge = ((r.edge as number) || (r.edge_pct as number) || 0)
+                  const edgePct = edge < 1 ? edge * 100 : edge
+                  const modelProb = ((r.model_prob as number) || (r.implied_prob as number) || 0)
+                  const modelPct = modelProb < 1 ? modelProb * 100 : modelProb
+                  const tier = (r.tier as string) || '—'
+                  const verdict = (r.verdict as string) || (r.status as string) || '—'
+                  const kellyPct = (r.kelly_pct as number) || 0
+                  const side = (r.side as string) || ''
+                  const line = (r.line as number) || 0
+                  const stat = (r.stat as string) || ''
+
+                  return (
+                    <tr key={i} className="border-t border-gray-800/50 hover:bg-gray-800/30">
+                      <td className="px-3 py-2">
+                        <span className="text-white font-medium">{name}</span>
+                        {stat && <span className="text-gray-500 text-[10px] ml-1">{stat}</span>}
+                      </td>
+                      <td className="px-3 py-2 text-gray-400">
+                        {side && line ? `${side} ${line} — ` : ''}{market}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-white">{odds > 0 ? odds.toFixed(2) : '—'}</td>
+                      <td className="px-3 py-2 text-right font-mono text-emerald-400">+{edgePct.toFixed(1)}%</td>
+                      <td className="px-3 py-2 text-right font-mono text-cyan-400">{modelPct.toFixed(1)}%</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          tier === 'STRONG' ? 'bg-emerald-500/20 text-emerald-400' :
+                          tier === 'MODERATE' ? 'bg-cyan-500/20 text-cyan-400' :
+                          'bg-amber-500/20 text-amber-400'
+                        }`}>{tier}</span>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          verdict === 'OVERLAY' || verdict === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' :
+                          verdict === 'PLACED' ? 'bg-cyan-500/20 text-cyan-400' :
+                          verdict === 'EXPIRED' ? 'bg-gray-500/20 text-gray-400' :
+                          'bg-amber-500/20 text-amber-400'
+                        }`}>{verdict}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-gray-400">{kellyPct > 0 ? `${kellyPct}%` : '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
