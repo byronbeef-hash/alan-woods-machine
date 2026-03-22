@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { updateSystemConfig } from '../lib/queries'
 import { useViewMode } from '../components/layout/PageShell'
 
 // ---------------------------------------------------------------------------
@@ -547,6 +548,15 @@ export function PlannerPage() {
         </div>
       </div>
 
+      {/* ---- LIVE PROGRAM CONTROL ---- */}
+      <LiveProgramPanel
+        isLive={isLive}
+        bankroll={BANKROLL}
+        dailyBudget={DAILY_BUDGET}
+        maxBet={MAX_BET}
+        queryClient={queryClient}
+      />
+
       {/* Daily Budget */}
       {bets.length > 0 && (
         <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4">
@@ -776,6 +786,190 @@ export function PlannerPage() {
         Alan Woods formula: W.E. = P(win) × odds (net of 5% commission). Model uses 8 factors: form, barrier, jockey, trainer, weight, freshness, age, fav-longshot bias.
         Click any row to see the full breakdown. Bankroll: ${BANKROLL.toLocaleString()}.
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Live Program Panel
+// ---------------------------------------------------------------------------
+
+function LiveProgramPanel({ isLive, bankroll, dailyBudget, maxBet, queryClient }: {
+  isLive: boolean; bankroll: number; dailyBudget: number; maxBet: number;
+  queryClient: ReturnType<typeof useQueryClient>
+}) {
+  const [toggling, setToggling] = useState(false)
+
+  const { data: status } = useQuery({
+    queryKey: ['planner_live_status'],
+    queryFn: async () => {
+      const { data: configs } = await supabase
+        .from('system_config')
+        .select('key, value')
+        .in('key', ['woods_mode', 'auto_scan_enabled', 'scan_mode', 'active_sports', 'runner_heartbeat', 'activity_log', 'daily_summary'])
+
+      const m: Record<string, unknown> = {}
+      for (const c of configs || []) m[c.key] = c.value
+
+      const { count: overlayCount } = await supabase
+        .from('racing_overlays')
+        .select('*', { count: 'exact', head: true })
+        .eq('verdict', 'OVERLAY')
+
+      const { count: pendingCount } = await supabase
+        .from('bets')
+        .select('*', { count: 'exact', head: true })
+        .eq('result', 'PENDING')
+
+      const heartbeat = m.runner_heartbeat as { ts: string; source: string } | null
+      const heartbeatAge = heartbeat?.ts ? Math.round((Date.now() - new Date(heartbeat.ts).getTime()) / 60000) : null
+
+      const actLog = m.activity_log as Array<{ ts: string; msg: string; type: string }> | null
+      const recentActivities = actLog ? actLog.slice(-5).reverse() : []
+
+      const summary = m.daily_summary as { date: string; wins: number; losses: number; pnl: number; win_rate: number } | null
+
+      return {
+        mode: (m.woods_mode as string) || 'demo',
+        autoScan: m.auto_scan_enabled as boolean,
+        scanMode: (m.scan_mode as string) || 'manual',
+        activeSports: (m.active_sports as string[]) || [],
+        overlayCount: overlayCount || 0,
+        pendingCount: pendingCount || 0,
+        runnerHealthy: heartbeatAge !== null && heartbeatAge < 360,
+        heartbeatAge,
+        recentActivities,
+        summary,
+      }
+    },
+    refetchInterval: 30000,
+  })
+
+  const toggleLive = async () => {
+    setToggling(true)
+    try {
+      const newMode = isLive ? 'demo' : 'live'
+      await updateSystemConfig('woods_mode', newMode)
+      queryClient.invalidateQueries({ queryKey: ['planner_config'] })
+      queryClient.invalidateQueries({ queryKey: ['planner_live_status'] })
+    } finally {
+      setToggling(false)
+    }
+  }
+
+  return (
+    <div className={`rounded-xl border-2 p-5 space-y-4 ${
+      isLive ? 'border-red-500/30 bg-red-500/5' : 'border-emerald-500/30 bg-emerald-500/5'
+    }`}>
+      {/* Header with toggle */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-white">Live Program</h3>
+          <p className="text-[10px] text-gray-500 mt-0.5">
+            {isLive
+              ? 'System is placing real bets on Betfair Exchange'
+              : 'System is in demo mode — paper trading only'}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400">{isLive ? 'Live' : 'Demo'}</span>
+          <button
+            onClick={toggleLive}
+            disabled={toggling}
+            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ${
+              isLive ? 'bg-red-600' : 'bg-gray-700'
+            } ${toggling ? 'opacity-50' : ''}`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+              isLive ? 'translate-x-8' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Config summary */}
+      <div className="grid grid-cols-5 gap-2">
+        <div className="rounded-lg bg-gray-900/80 p-2.5">
+          <span className="text-[10px] text-gray-500 block">Bankroll</span>
+          <span className="text-sm font-mono font-bold text-white">${bankroll.toLocaleString()}</span>
+        </div>
+        <div className="rounded-lg bg-gray-900/80 p-2.5">
+          <span className="text-[10px] text-gray-500 block">Daily Budget</span>
+          <span className="text-sm font-mono font-bold text-cyan-400">${dailyBudget}</span>
+        </div>
+        <div className="rounded-lg bg-gray-900/80 p-2.5">
+          <span className="text-[10px] text-gray-500 block">Max Bet</span>
+          <span className="text-sm font-mono font-bold text-white">${maxBet}</span>
+        </div>
+        <div className="rounded-lg bg-gray-900/80 p-2.5">
+          <span className="text-[10px] text-gray-500 block">Overlays</span>
+          <span className="text-sm font-mono font-bold text-emerald-400">{status?.overlayCount ?? '—'}</span>
+        </div>
+        <div className="rounded-lg bg-gray-900/80 p-2.5">
+          <span className="text-[10px] text-gray-500 block">Pending Bets</span>
+          <span className="text-sm font-mono font-bold text-amber-400">{status?.pendingCount ?? '—'}</span>
+        </div>
+      </div>
+
+      {/* Status badges */}
+      {status && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+            status.runnerHealthy
+              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+              : 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+          }`}>{status.runnerHealthy ? 'RUNNER OK' : status.heartbeatAge !== null ? `RUNNER ${Math.round(status.heartbeatAge / 60)}h AGO` : 'NO RUNNER'}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+            status.autoScan
+              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+              : 'bg-gray-500/20 text-gray-400 border-gray-500/40'
+          }`}>{status.autoScan ? 'AUTO-SCAN' : 'MANUAL SCAN'}</span>
+          {status.activeSports.map(s => (
+            <span key={s} className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+              {s === 'racing' ? 'Racing' : s === 'basketball_nba' ? 'NBA' : s === 'aussierules_afl' ? 'AFL' : 'Soccer'}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Daily results */}
+      {status?.summary && (
+        <div className="rounded-lg bg-gray-900/80 border border-gray-700 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-gray-500">Today's Results — {status.summary.date}</span>
+            <span className={`text-sm font-mono font-bold ${status.summary.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {status.summary.pnl >= 0 ? '+' : ''}${status.summary.pnl.toFixed(2)}
+            </span>
+          </div>
+          <div className="flex items-center gap-4 mt-1.5">
+            <span className="text-xs text-gray-400">{status.summary.wins}W / {status.summary.losses}L</span>
+            <span className="text-xs text-gray-400">{status.summary.win_rate}% win rate</span>
+          </div>
+        </div>
+      )}
+
+      {/* Activity log */}
+      {status && status.recentActivities.length > 0 && (
+        <div className="space-y-1">
+          <span className="text-[10px] text-gray-500">Recent Activity</span>
+          {status.recentActivities.map((a, i) => (
+            <div key={i} className="flex items-center justify-between text-[10px] py-0.5">
+              <span className="text-gray-400">{a.msg}</span>
+              <span className="text-gray-600">
+                {new Date(a.ts).toLocaleString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true, day: 'numeric', month: 'short' })}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isLive && (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-2.5">
+          <p className="text-[10px] text-red-400">
+            Live mode active. Bets placed on Betfair Exchange within risk limits (${dailyBudget}/day, ${maxBet}/bet max).
+          </p>
+        </div>
+      )}
     </div>
   )
 }
