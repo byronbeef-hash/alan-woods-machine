@@ -403,7 +403,7 @@ function ExplanationPanel({ overlay, bankroll, stake }: { overlay: RacingOverlay
 // Planner Page
 // ---------------------------------------------------------------------------
 
-const BANKROLL = 2546
+const DEFAULT_BANKROLL = 2500
 const DEFAULT_BUDGET_PCT = 10
 
 function allocateBudget(budget: number, overlays: RacingOverlayRow[], bankroll: number): Record<number, number> {
@@ -444,6 +444,26 @@ export function PlannerPage() {
   const [budgetPct, setBudgetPct] = useState(DEFAULT_BUDGET_PCT)
   const [budgetApplied, setBudgetApplied] = useState(false)
 
+  // Fetch live config for bankroll, budget, mode
+  const { data: sysConfig } = useQuery({
+    queryKey: ['planner_config'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('system_config')
+        .select('key, value')
+        .in('key', ['starting_bankroll', 'daily_budget', 'max_single_bet', 'woods_mode'])
+      const map: Record<string, unknown> = {}
+      for (const r of data || []) map[r.key] = r.value
+      return map
+    },
+    refetchInterval: 60000,
+  })
+
+  const BANKROLL = (sysConfig?.starting_bankroll as number) || DEFAULT_BANKROLL
+  const MAX_BET = (sysConfig?.max_single_bet as number) || 10
+  const DAILY_BUDGET = (sysConfig?.daily_budget as number) || 100
+  const IS_LIVE = (sysConfig?.woods_mode as string) === 'live'
+
   const { data: overlayBets, isLoading } = useQuery({
     queryKey: ['planner_overlays'],
     queryFn: fetchPlannerOverlays,
@@ -462,7 +482,7 @@ export function PlannerPage() {
   const overlays = bets.filter(b => b.verdict === 'OVERLAY')
   const marginals = bets.filter(b => b.verdict === 'MARGINAL')
 
-  const getStake = (o: RacingOverlayRow) => stakes[o.id] ?? kellyStake(o.we_net, BANKROLL, o.back_price, o.back_size)
+  const getStake = (o: RacingOverlayRow) => Math.min(stakes[o.id] ?? kellyStake(o.we_net, BANKROLL, o.back_price, o.back_size), MAX_BET)
   const setStake = (id: number, val: number) => setStakes(prev => ({ ...prev, [id]: val }))
 
   const totalStake = overlays.reduce((s, o) => s + getStake(o), 0)
@@ -493,7 +513,7 @@ export function PlannerPage() {
     }
   }
 
-  const isLive = viewMode === 'live'
+  const isLive = IS_LIVE || viewMode === 'live'
 
   return (
     <div className="space-y-6">
@@ -534,7 +554,7 @@ export function PlannerPage() {
             <div>
               <h3 className="text-sm font-bold text-white">Daily Budget</h3>
               <p className="text-[10px] text-gray-500 mt-0.5">
-                Set % of bankroll (${BANKROLL.toLocaleString()}) to allocate across today's top overlay bets
+                Set % of bankroll (${BANKROLL.toLocaleString()}) to allocate. Daily budget: ${DAILY_BUDGET}, max bet: ${MAX_BET}
               </p>
             </div>
             <div className="flex items-center gap-3">

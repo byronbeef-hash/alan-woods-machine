@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchSystemConfig, updateSystemConfig } from '../lib/queries'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
+import { supabase } from '../lib/supabase'
 
 // ---------------------------------------------------------------------------
 // Sport definitions
@@ -136,8 +137,8 @@ export function SettingsPage() {
   const scanMode = get<string>('scan_mode', 'manual')
   const activeSports = get<string[]>('active_sports', ['basketball_nba'])
   const bankroll = get<number>('starting_bankroll', 2546)
-  const dailyBudget = get<number>('daily_limit', 250)
-  const maxSingleBet = get<number>('max_single_bet', 100)
+  const dailyBudget = get<number>('daily_budget', 100)
+  const maxSingleBet = get<number>('max_single_bet', 10)
   const dailyStopLoss = get<number>('daily_stop_loss', 500)
   const scanFrequency = get<string>('scan_frequency', 'daily')
   const autoScanEnabled = get<boolean>('auto_scan_enabled', false)
@@ -386,7 +387,7 @@ export function SettingsPage() {
               min={10}
               max={Math.min(5000, bankroll)}
               step={10}
-              onChange={v => set('daily_limit', v)}
+              onChange={v => set('daily_budget', v)}
               prefix="$"
               presets={[50, 100, 250, 500, 1000]}
             />
@@ -562,6 +563,11 @@ export function SettingsPage() {
       </div>
 
       {/* ================================================================= */}
+      {/* RUNNER & INFRASTRUCTURE                                            */}
+      {/* ================================================================= */}
+      <RunnerHealthPanel />
+
+      {/* ================================================================= */}
       {/* BETFAIR CONNECTION                                                 */}
       {/* ================================================================= */}
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
@@ -585,6 +591,97 @@ export function SettingsPage() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Runner Health Panel
+// ---------------------------------------------------------------------------
+
+function RunnerHealthPanel() {
+  const { data } = useQuery({
+    queryKey: ['runner_health'],
+    queryFn: async () => {
+      const { data: configs } = await supabase
+        .from('system_config')
+        .select('key, value, updated_at')
+        .in('key', ['runner_heartbeat', 'activity_log'])
+
+      const { count: overlayCount } = await supabase
+        .from('racing_overlays')
+        .select('*', { count: 'exact', head: true })
+
+      const { count: betCount } = await supabase
+        .from('bets')
+        .select('*', { count: 'exact', head: true })
+
+      const configMap: Record<string, { value: unknown; updated_at: string }> = {}
+      for (const c of configs || []) configMap[c.key] = { value: c.value, updated_at: c.updated_at }
+
+      const heartbeat = configMap.runner_heartbeat?.value as { ts: string; source: string; status: string } | null
+      const actLog = configMap.activity_log?.value as Array<{ ts: string; msg: string; type: string }> | null
+      const lastActivity = actLog && actLog.length > 0 ? actLog[actLog.length - 1] : null
+
+      return { heartbeat, lastActivity, overlayCount: overlayCount || 0, betCount: betCount || 0 }
+    },
+    refetchInterval: 60000,
+  })
+
+  if (!data) return null
+
+  const heartbeatAge = data.heartbeat?.ts
+    ? Math.round((Date.now() - new Date(data.heartbeat.ts).getTime()) / 60000)
+    : null
+
+  const isHealthy = heartbeatAge !== null && heartbeatAge < 360 // 6 hours
+  const sourceLabel = data.heartbeat?.source === 'github_actions' ? 'GitHub Actions' : data.heartbeat?.source || 'Unknown'
+
+  return (
+    <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+      <div className="flex items-center gap-3 mb-4">
+        <h3 className="text-sm font-bold text-white">Runner Infrastructure</h3>
+        <span className={`ml-auto rounded-full px-2.5 py-1 text-[10px] font-bold border ${
+          isHealthy ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'
+        }`}>{isHealthy ? 'HEALTHY' : heartbeatAge === null ? 'NO DATA' : 'STALE'}</span>
+      </div>
+
+      <div className="grid grid-cols-4 gap-3 mb-3">
+        <div className="rounded-lg bg-gray-800 p-3">
+          <span className="text-[10px] text-gray-500 block">Runner</span>
+          <span className="text-xs font-bold text-gray-300">{sourceLabel}</span>
+        </div>
+        <div className="rounded-lg bg-gray-800 p-3">
+          <span className="text-[10px] text-gray-500 block">Last Heartbeat</span>
+          <span className="text-xs font-mono text-gray-300">
+            {heartbeatAge !== null ? (heartbeatAge < 60 ? `${heartbeatAge}m ago` : `${Math.round(heartbeatAge / 60)}h ago`) : 'Never'}
+          </span>
+        </div>
+        <div className="rounded-lg bg-gray-800 p-3">
+          <span className="text-[10px] text-gray-500 block">Racing Overlays</span>
+          <span className="text-xs font-mono font-bold text-white">{data.overlayCount}</span>
+        </div>
+        <div className="rounded-lg bg-gray-800 p-3">
+          <span className="text-[10px] text-gray-500 block">Total Bets</span>
+          <span className="text-xs font-mono font-bold text-white">{data.betCount}</span>
+        </div>
+      </div>
+
+      {data.lastActivity && (
+        <div className="rounded-lg bg-gray-800/50 border border-gray-700 p-2.5">
+          <span className="text-[10px] text-gray-500 block">Last Activity</span>
+          <span className="text-xs text-gray-300">{data.lastActivity.msg}</span>
+        </div>
+      )}
+
+      {!isHealthy && (
+        <div className="mt-3 rounded-lg bg-amber-500/10 border border-amber-500/30 p-3">
+          <p className="text-xs text-amber-400">
+            Runner hasn't checked in recently. Scans run automatically via GitHub Actions (3x daily for racing, 1x for NBA).
+            If this persists, check the <a href="https://github.com/byronbeef-hash/alan-woods-machine/actions" target="_blank" className="underline">Actions tab</a> on GitHub.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

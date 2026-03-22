@@ -49,8 +49,8 @@ const DEFAULT_STRATEGY: DailyStrategy = {
   sport: 'racing',
   mode: 'autonomous',
   bankroll: 2500,
-  dailyBudget: 250,
-  maxBet: 100,
+  dailyBudget: 100,
+  maxBet: 10,
   dataSource: 'Betfair Exchange',
   minWE: 1.05,
   maxBets: 8,
@@ -141,7 +141,7 @@ async function fetchSystemStatus() {
   const { data: configs } = await supabase
     .from('system_config')
     .select('key, value, updated_at')
-    .in('key', ['woods_mode', 'active_sports', 'auto_scan_enabled', 'activity_log', 'daily_strategy'])
+    .in('key', ['woods_mode', 'active_sports', 'auto_scan_enabled', 'activity_log', 'daily_strategy', 'daily_summary', 'runner_heartbeat', 'daily_budget', 'max_single_bet', 'starting_bankroll'])
 
   const { count: overlayCount } = await supabase
     .from('racing_overlays')
@@ -164,6 +164,17 @@ async function fetchSystemStatus() {
   const actLog = configMap.activity_log?.value as Array<{ ts: string; msg: string; type: string }> | null
   const lastActivity = actLog && actLog.length > 0 ? actLog[actLog.length - 1] : null
 
+  const dailySummary = configMap.daily_summary?.value as {
+    date: string; settled: number; wins: number; losses: number;
+    win_rate: number; pnl: number; pending: number; overlays_found: number;
+  } | null
+
+  const heartbeat = configMap.runner_heartbeat?.value as { ts: string; source: string } | null
+  const heartbeatAge = heartbeat?.ts
+    ? Math.round((Date.now() - new Date(heartbeat.ts).getTime()) / 60000)
+    : null
+  const runnerHealthy = heartbeatAge !== null && heartbeatAge < 360
+
   return {
     mode: (configMap.woods_mode?.value as string) || 'demo',
     autoScan: configMap.auto_scan_enabled?.value as boolean,
@@ -173,6 +184,12 @@ async function fetchSystemStatus() {
     betCount: betCount || 0,
     lastActivity,
     lastActivityTime: lastActivity?.ts || configMap.activity_log?.updated_at || null,
+    dailySummary,
+    runnerHealthy,
+    heartbeatAge,
+    bankroll: (configMap.starting_bankroll?.value as number) || 2500,
+    dailyBudgetConfig: (configMap.daily_budget?.value as number) || 100,
+    maxBetConfig: (configMap.max_single_bet?.value as number) || 10,
   }
 }
 
@@ -335,32 +352,81 @@ export function DailyPage() {
                   : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
               }`}>{status.mode.toUpperCase()}</span>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                status.runnerHealthy
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                  : 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+              }`}>{status.runnerHealthy ? 'RUNNER OK' : 'RUNNER STALE'}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
                 status.autoScan
                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
                   : 'bg-gray-500/20 text-gray-400 border-gray-500/40'
               }`}>{status.autoScan ? 'AUTO-SCAN ON' : 'AUTO-SCAN OFF'}</span>
             </div>
           </div>
-          <div className="grid grid-cols-4 gap-3">
-            <div className="rounded-lg bg-gray-800 p-2.5">
-              <span className="text-[10px] text-gray-500 block">Racing Overlays</span>
+
+          {/* Config summary */}
+          <div className="grid grid-cols-6 gap-2 mb-3">
+            <div className="rounded-lg bg-gray-800 p-2">
+              <span className="text-[10px] text-gray-500 block">Bankroll</span>
+              <span className="text-sm font-mono font-bold text-white">${status.bankroll.toLocaleString()}</span>
+            </div>
+            <div className="rounded-lg bg-gray-800 p-2">
+              <span className="text-[10px] text-gray-500 block">Daily Budget</span>
+              <span className="text-sm font-mono font-bold text-cyan-400">${status.dailyBudgetConfig}</span>
+            </div>
+            <div className="rounded-lg bg-gray-800 p-2">
+              <span className="text-[10px] text-gray-500 block">Max Bet</span>
+              <span className="text-sm font-mono font-bold text-white">${status.maxBetConfig}</span>
+            </div>
+            <div className="rounded-lg bg-gray-800 p-2">
+              <span className="text-[10px] text-gray-500 block">Overlays</span>
               <span className="text-sm font-mono font-bold text-white">{status.overlayCount}</span>
             </div>
-            <div className="rounded-lg bg-gray-800 p-2.5">
-              <span className="text-[10px] text-gray-500 block">Scan Results</span>
-              <span className="text-sm font-mono font-bold text-white">{status.scanCount}</span>
-            </div>
-            <div className="rounded-lg bg-gray-800 p-2.5">
+            <div className="rounded-lg bg-gray-800 p-2">
               <span className="text-[10px] text-gray-500 block">Total Bets</span>
               <span className="text-sm font-mono font-bold text-white">{status.betCount}</span>
             </div>
-            <div className="rounded-lg bg-gray-800 p-2.5">
-              <span className="text-[10px] text-gray-500 block">Active Sports</span>
+            <div className="rounded-lg bg-gray-800 p-2">
+              <span className="text-[10px] text-gray-500 block">Sports</span>
               <span className="text-sm font-mono font-bold text-white">{status.activeSports.length}</span>
             </div>
           </div>
+
+          {/* Daily summary if available */}
+          {status.dailySummary && (
+            <div className="rounded-lg bg-gray-800/50 border border-gray-700 p-3 mb-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] text-gray-500">Daily Summary — {status.dailySummary.date}</span>
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                <div>
+                  <span className="text-[10px] text-gray-500 block">P&L</span>
+                  <span className={`text-sm font-mono font-bold ${status.dailySummary.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {status.dailySummary.pnl >= 0 ? '+' : ''}${status.dailySummary.pnl.toFixed(2)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-500 block">Record</span>
+                  <span className="text-sm font-mono font-bold text-white">{status.dailySummary.wins}W / {status.dailySummary.losses}L</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-500 block">Win Rate</span>
+                  <span className="text-sm font-mono font-bold text-white">{status.dailySummary.win_rate}%</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-500 block">Pending</span>
+                  <span className="text-sm font-mono font-bold text-amber-400">{status.dailySummary.pending}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-500 block">Overlays</span>
+                  <span className="text-sm font-mono font-bold text-cyan-400">{status.dailySummary.overlays_found}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {status.lastActivity && (
-            <div className="mt-3 rounded-lg bg-gray-800/50 border border-gray-700 p-2.5 flex items-center justify-between">
+            <div className="rounded-lg bg-gray-800/50 border border-gray-700 p-2.5 flex items-center justify-between">
               <div>
                 <span className="text-[10px] text-gray-500 block">Last Activity</span>
                 <span className="text-xs text-gray-300">{status.lastActivity.msg}</span>
@@ -370,14 +436,6 @@ export function DailyPage() {
                   day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true
                 }) : '—'}
               </span>
-            </div>
-          )}
-          {status.lastActivityTime && (Date.now() - new Date(status.lastActivityTime).getTime() > 24 * 60 * 60 * 1000) && (
-            <div className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2.5">
-              <p className="text-[10px] text-amber-400">
-                Runner hasn't reported activity in over 24 hours. It may need to be restarted on Railway.
-                Racing scans use Betfair directly and work independently. NBA/AFL/Soccer need the Odds API (quota may be exhausted).
-              </p>
             </div>
           )}
         </div>
