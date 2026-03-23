@@ -5,7 +5,7 @@ import { BetsTable } from '../components/bets/BetsTable'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { formatCurrency } from '../lib/utils'
 import { requestMirrorBets } from '../lib/queries'
-import { useViewMode } from '../components/layout/PageShell'
+
 import type { BetFilters as BetFiltersType } from '../lib/queries'
 import type { Bet } from '../lib/types'
 
@@ -231,17 +231,12 @@ function MirrorPanel({ bets, onClose }: { bets: Bet[]; onClose: () => void }) {
 export function BetsPage() {
   const [filters, setFilters] = useState<BetFiltersType>({})
   const [showMirror, setShowMirror] = useState(false)
-  const viewMode = useViewMode()
   const { data: bets, isLoading, error } = useFilteredBets(filters)
   useRealtimeBets()
 
   if (error) return <div className="text-red-400">Error loading bets: {error.message}</div>
 
-  // Filter by view mode: demo bets have no LIVE tag, live bets do
-  const rawBets = bets || []
-  const allBets = viewMode === 'live'
-    ? rawBets.filter(b => b.notes?.includes('LIVE'))
-    : rawBets.filter(b => !b.notes?.includes('LIVE'))
+  const allBets = bets || []
 
   return (
     <div className="space-y-6">
