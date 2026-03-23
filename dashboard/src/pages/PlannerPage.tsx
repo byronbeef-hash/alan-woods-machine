@@ -937,13 +937,13 @@ function LiveProgramPanel({ isLive, bankroll, dailyBudget, maxBet, queryClient }
         <div className="rounded-lg bg-gray-900/80 border border-gray-700 p-3">
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-gray-500">Today's Results — {status.summary.date}</span>
-            <span className={`text-sm font-mono font-bold ${status.summary.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {status.summary.pnl >= 0 ? '+' : ''}${status.summary.pnl.toFixed(2)}
+            <span className={`text-sm font-mono font-bold ${(status.summary.pnl ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {(status.summary.pnl ?? 0) >= 0 ? '+' : ''}${(status.summary.pnl ?? 0).toFixed(2)}
             </span>
           </div>
           <div className="flex items-center gap-4 mt-1.5">
-            <span className="text-xs text-gray-400">{status.summary.wins}W / {status.summary.losses}L</span>
-            <span className="text-xs text-gray-400">{status.summary.win_rate}% win rate</span>
+            <span className="text-xs text-gray-400">{status.summary.wins ?? 0}W / {status.summary.losses ?? 0}L</span>
+            <span className="text-xs text-gray-400">{status.summary.win_rate ?? 0}% win rate</span>
           </div>
         </div>
       )}
