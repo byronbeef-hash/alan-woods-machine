@@ -13,6 +13,7 @@ import { PlannerPage } from './pages/PlannerPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { DailyPage } from './pages/DailyPage'
 import { LiveStakePage } from './pages/LiveStakePage'
+import { BetfairPage } from './pages/BetfairPage'
 import { LoginPage } from './pages/LoginPage'
 import { LoadingSpinner } from './components/common/LoadingSpinner'
 
@@ -50,6 +51,7 @@ function ProtectedApp() {
         <Route path="/overlays" element={<OverlaysPage />} />
         <Route path="/planner" element={<PlannerPage />} />
         <Route path="/live-stake" element={<LiveStakePage />} />
+        <Route path="/betfair" element={<BetfairPage />} />
         <Route path="/results" element={<ResultsPage />} />
         <Route path="/bets" element={<BetsPage />} />
         <Route path="/markets" element={<MarketsPage />} />
