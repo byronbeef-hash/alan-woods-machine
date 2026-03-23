@@ -247,9 +247,9 @@ function formatTime(iso: string) {
   if (!iso) return '—'
   try {
     return new Date(iso).toLocaleString('en-AU', {
-      weekday: 'short', month: 'short', day: 'numeric',
+      weekday: 'short', day: 'numeric', month: 'short',
       hour: 'numeric', minute: '2-digit', hour12: true,
-      timeZone: 'Australia/Sydney',
+      timeZone: 'Australia/Brisbane',
     })
   } catch { return iso.slice(0, 16) }
 }
@@ -666,6 +666,7 @@ export function PlannerPage() {
               <thead>
                 <tr className="bg-gray-800/50 text-gray-500">
                   <th className="px-3 py-2 text-left font-medium">Selection</th>
+                  <th className="px-3 py-2 text-left font-medium">Race Time (QLD)</th>
                   <th className="px-3 py-2 text-right font-medium">Odds</th>
                   <th className="px-3 py-2 text-right font-medium">Edge</th>
                   <th className="px-3 py-2 text-right font-medium">W.E.</th>
@@ -683,6 +684,7 @@ export function PlannerPage() {
                   return (
                     <tr key={i} className="border-t border-gray-800/50 hover:bg-gray-800/30">
                       <td className="px-3 py-2 text-white font-medium">{o.name}</td>
+                      <td className="px-3 py-2 text-gray-400 text-[10px]">{formatTime(o.start_time)}</td>
                       <td className="px-3 py-2 text-right font-mono text-white">{o.back_price.toFixed(2)}</td>
                       <td className="px-3 py-2 text-right font-mono text-emerald-400">+{(o.edge * 100).toFixed(1)}%</td>
                       <td className="px-3 py-2 text-right font-mono text-cyan-400">{o.we_net.toFixed(3)}</td>
@@ -695,6 +697,7 @@ export function PlannerPage() {
                 })}
                 <tr className="border-t-2 border-cyan-500/30 bg-cyan-500/5">
                   <td className="px-3 py-2 text-white font-bold">TOTAL</td>
+                  <td className="px-3 py-2"></td>
                   <td className="px-3 py-2"></td>
                   <td className="px-3 py-2"></td>
                   <td className="px-3 py-2"></td>
