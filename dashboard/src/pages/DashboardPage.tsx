@@ -22,6 +22,7 @@ interface LiveBet {
   game: string
   bet_id: string
   status: string
+  race_time: string
 }
 
 interface TopOverlay {
@@ -97,19 +98,30 @@ function formatTime(iso: string) {
     return new Date(iso).toLocaleString('en-AU', {
       weekday: 'short', month: 'short', day: 'numeric',
       hour: 'numeric', minute: '2-digit', hour12: true,
-      timeZone: 'Australia/Sydney',
+      timeZone: 'Australia/Brisbane',
     })
   } catch { return iso.slice(0, 16) }
 }
 
 async function fetchLiveBets(): Promise<LiveBet[]> {
-  // Fetch all PENDING bets from the bets table
   const { data, error } = await supabase
     .from('bets')
     .select('*')
     .eq('result', 'PENDING')
     .order('created_at', { ascending: false })
   if (error || !data || data.length === 0) return []
+
+  // Look up race times from racing_overlays
+  const playerNames = data.map(b => b.player).filter(Boolean)
+  const { data: overlays } = await supabase
+    .from('racing_overlays')
+    .select('name, start_time')
+    .in('name', playerNames)
+
+  const timeMap: Record<string, string> = {}
+  for (const o of overlays || []) {
+    if (o.start_time) timeMap[o.name] = o.start_time
+  }
 
   return data.map(b => ({
     player: b.player || '—',
@@ -123,8 +135,8 @@ async function fetchLiveBets(): Promise<LiveBet[]> {
     game: b.market || '—',
     bet_id: String(b.id),
     status: 'MATCHED',
+    race_time: timeMap[b.player] || b.created_at || '',
   }))
-
 }
 
 export function DashboardPage() {
@@ -194,6 +206,7 @@ export function DashboardPage() {
                   <th className="px-3 py-2">Unmatched</th>
                   <th className="px-3 py-2">Match %</th>
                   <th className="px-3 py-2">Potential Win</th>
+                  <th className="px-3 py-2">Race Time (QLD)</th>
                   <th className="px-3 py-2">Status</th>
                 </tr>
               </thead>
@@ -224,6 +237,9 @@ export function DashboardPage() {
                       </td>
                       <td className="px-3 py-3 font-mono text-emerald-400">
                         +${(bet.matched * (bet.odds - 1) * 0.95).toFixed(2)}
+                      </td>
+                      <td className="px-3 py-3 text-[10px] text-gray-400">
+                        {bet.race_time ? formatTime(bet.race_time) : '—'}
                       </td>
                       <td className="px-3 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
