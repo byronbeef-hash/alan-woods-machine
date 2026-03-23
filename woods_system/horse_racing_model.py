@@ -129,7 +129,11 @@ class HorseRacingModel:
 
     def calculate_model_probability(self, runner: dict, meta: dict,
                                      market_prob: float, field_size: int,
-                                     median_weight: float) -> dict:
+                                     median_weight: float,
+                                     track_condition: str = None,
+                                     weather: dict = None,
+                                     formfav_stats: dict = None,
+                                     gear_change: str = None) -> dict:
         """
         Calculate adjusted win probability for a single runner.
 
@@ -188,6 +192,40 @@ class HorseRacingModel:
         flb_factor = self._get_flb_factor(back_price)
         combined_factor *= flb_factor
         adjustments['flb'] = round(flb_factor - 1, 3)
+
+        # 9. TRACK CONDITION (from FormFav)
+        if track_condition:
+            from track_weather import TrackWeatherService
+            tw = TrackWeatherService()
+            tc_result = tw.calculate_track_condition_factor(
+                track_condition, runner.get('runnerName', ''), formfav_stats
+            )
+            combined_factor *= tc_result['factor']
+            adjustments['track_condition'] = round(tc_result['factor'] - 1, 3)
+
+        # 10. WEATHER
+        if weather and weather.get('rain_mm', 0) > 0:
+            from track_weather import TrackWeatherService
+            tw = TrackWeatherService()
+            wx_result = tw.calculate_weather_factor(weather)
+            combined_factor *= wx_result['factor']
+            adjustments['weather'] = round(wx_result['factor'] - 1, 3)
+
+        # 11. TRACK SPECIALIST (from FormFav stats)
+        if formfav_stats:
+            from track_weather import TrackWeatherService
+            tw = TrackWeatherService()
+            ts_result = tw.calculate_track_stats_factor(formfav_stats)
+            combined_factor *= ts_result['factor']
+            adjustments['track_stats'] = round(ts_result['factor'] - 1, 3)
+
+        # 12. GEAR CHANGE
+        if gear_change:
+            from track_weather import TrackWeatherService
+            tw = TrackWeatherService()
+            gc_result = tw.calculate_gear_change_factor(gear_change)
+            combined_factor *= gc_result['factor']
+            adjustments['gear_change'] = round(gc_result['factor'] - 1, 3)
 
         # Calculate model probability
         model_prob = market_prob * combined_factor
@@ -283,7 +321,8 @@ class HorseRacingModel:
     # Race scanning
     # ------------------------------------------------------------------
 
-    def scan_race(self, market: dict) -> list[dict]:
+    def scan_race(self, market: dict, track_condition: str = None,
+                  weather: dict = None, formfav_runners: dict = None) -> list[dict]:
         """Analyse a single race and return all runners with W.E."""
         market_id = market['marketId']
         market_name = market['marketName']
@@ -340,9 +379,23 @@ class HorseRacingModel:
 
             market_prob = 1.0 / back_price
 
+            # Look up FormFav stats for this runner
+            runner_ff_stats = None
+            runner_gear = None
+            if formfav_runners:
+                # Match by name (strip number prefix like "1. ")
+                clean_name = name.split('. ', 1)[-1] if '. ' in name else name
+                runner_ff_stats = formfav_runners.get(clean_name)
+                if runner_ff_stats:
+                    runner_gear = runner_ff_stats.get('gear_change')
+
             # Run model
             model_result = self.calculate_model_probability(
-                runner, meta, market_prob, field_size, median_weight
+                runner, meta, market_prob, field_size, median_weight,
+                track_condition=track_condition,
+                weather=weather,
+                formfav_stats=runner_ff_stats,
+                gear_change=runner_gear,
             )
 
             model_prob = model_result['model_prob']
@@ -455,6 +508,11 @@ class HorseRacingModel:
                 'data_points': data_points,
                 'data_sources': data_sources,
                 'median_weight': round(median_weight, 1),
+                # Track & weather (from FormFav + BOM)
+                'track_condition': track_condition or '',
+                'weather_rain': weather.get('rain_mm', 0) if weather else 0,
+                'weather_temp': weather.get('temperature', 0) if weather else 0,
+                'gear_change': runner_gear or '',
             })
 
         # Normalise model probabilities within race
@@ -486,6 +544,44 @@ class HorseRacingModel:
         if not self._ensure_login():
             return []
 
+        # Extract venue from event name (e.g. "Newcastle (AUS) 23rd Mar" -> "newcastle")
+        venue = event_name.split('(')[0].strip().lower() if event_name else ''
+        venue_slug = venue.replace(' ', '-')
+        race_date = None
+        try:
+            # Extract date from event name
+            import re
+            date_match = re.search(r'(\d+)\w*\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', event_name)
+            if date_match:
+                day = int(date_match.group(1))
+                month_str = date_match.group(2)
+                months = {'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+                          'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12}
+                month = months.get(month_str, 3)
+                year = datetime.now().year
+                race_date = f'{year}-{month:02d}-{day:02d}'
+        except Exception:
+            race_date = datetime.now().strftime('%Y-%m-%d')
+
+        # Fetch FormFav data for this meeting
+        track_condition = None
+        weather_data = None
+        formfav_runners = {}
+        try:
+            from track_weather import TrackWeatherService
+            tw = TrackWeatherService()
+            meeting_data = tw.get_meeting_conditions(venue_slug, race_date or datetime.now().strftime('%Y-%m-%d'))
+            track_condition = meeting_data.get('condition')
+            formfav_runners = meeting_data.get('runners', {})
+            if track_condition:
+                print(f"    Track: {track_condition} | Weather: {meeting_data.get('weather', '?')}")
+
+            weather_data = tw.get_weather_forecast(venue)
+            if weather_data.get('rain_mm', 0) > 0:
+                print(f"    Rain: {weather_data['rain_mm']}mm | Temp: {weather_data.get('temperature', '?')}C")
+        except Exception as e:
+            print(f"    [Track/Weather] {e}")
+
         # Fetch both WIN and PLACE markets
         market_types = ['WIN']
         if include_place:
@@ -511,7 +607,8 @@ class HorseRacingModel:
 
         # Scan WIN markets
         for m in win_markets:
-            results = self.scan_race(m)
+            results = self.scan_race(m, track_condition=track_condition,
+                                     weather=weather_data, formfav_runners=formfav_runners)
             for r in results:
                 r['bet_type'] = 'WIN'
             overlays = [r for r in results if r['verdict'] == 'OVERLAY']
@@ -530,7 +627,8 @@ class HorseRacingModel:
 
         # Scan PLACE markets (often less efficient = more overlays)
         for m in place_markets:
-            results = self.scan_race(m)
+            results = self.scan_race(m, track_condition=track_condition,
+                                     weather=weather_data, formfav_runners=formfav_runners)
             for r in results:
                 r['bet_type'] = 'PLACE'
             overlays = [r for r in results if r['verdict'] == 'OVERLAY']
