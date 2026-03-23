@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { updateSystemConfig } from '../lib/queries'
@@ -483,7 +483,18 @@ export function PlannerPage() {
   const bets = overlayBets || []
   const overlays = bets.filter(b => b.verdict === 'OVERLAY')
 
-  const getStake = (o: RacingOverlayRow) => Math.min(stakes[o.id] ?? kellyStake(o.we_net, BANKROLL, o.back_price, o.back_size), MAX_BET)
+  // Auto-allocate $180 when overlays first load
+  useEffect(() => {
+    if (overlays.length > 0 && Object.keys(stakes).length === 0) {
+      const alloc = allocateBudget(totalStakeInput, bets, BANKROLL)
+      if (Object.keys(alloc).length > 0) {
+        setStakes(alloc)
+        setBudgetApplied(true)
+      }
+    }
+  }, [overlays.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const getStake = (o: RacingOverlayRow) => stakes[o.id] ?? kellyStake(o.we_net, BANKROLL, o.back_price, o.back_size)
   const setStake = (id: number, val: number) => setStakes(prev => ({ ...prev, [id]: val }))
 
   const totalStake = overlays.reduce((s, o) => s + getStake(o), 0)
