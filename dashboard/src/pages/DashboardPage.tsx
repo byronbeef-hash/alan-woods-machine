@@ -103,58 +103,33 @@ function formatTime(iso: string) {
 }
 
 async function fetchLiveBets(): Promise<LiveBet[]> {
+  // Fetch all PENDING bets from the bets table
   const { data, error } = await supabase
-    .from('system_config')
-    .select('value')
-    .eq('key', 'live_betfair_bets')
-    .single()
-  if (error || !data?.value) return []
-  const orders = data.value as Array<{bet_id: string; side: string; price: number; size: number; matched: number; remaining: number; status: string; placed: string}>
+    .from('bets')
+    .select('*')
+    .eq('result', 'PENDING')
+    .order('created_at', { ascending: false })
+  if (error || !data || data.length === 0) return []
 
-  // Group by market (Gunston has 2 bet IDs)
-  const gunston = orders.filter(o => o.bet_id === '422437009637' || o.bet_id === '422437182350')
-  const chol = orders.filter(o => o.bet_id === '422437183925')
+  return data.map(b => ({
+    player: b.player || '—',
+    market: b.market || '—',
+    selection: `${b.stat} ${b.side} ${b.line || ''}`.trim(),
+    odds: b.odds_decimal || 0,
+    stake: b.bet_size || 0,
+    matched: b.bet_size || 0,
+    unmatched: 0,
+    potential_profit: (b.bet_size || 0) * ((b.odds_decimal || 1) - 1) * 0.95,
+    game: b.market || '—',
+    bet_id: String(b.id),
+    status: 'MATCHED',
+  }))
 
-  const bets: LiveBet[] = []
-  if (gunston.length > 0) {
-    const totalMatched = gunston.reduce((s, o) => s + (o.matched || 0), 0)
-    const totalRemaining = gunston.reduce((s, o) => s + (o.remaining || 0), 0)
-    bets.push({
-      player: 'Jack Gunston',
-      market: 'Goals - Jack Gunston',
-      selection: 'Over 1.5 Goals',
-      odds: 1.28,
-      stake: 100,
-      matched: totalMatched,
-      unmatched: totalRemaining,
-      potential_profit: totalMatched * (1.28 - 1) * 0.95,
-      game: 'Hawthorn v Sydney Swans',
-      bet_id: gunston.map(o => o.bet_id).join(' / '),
-      status: totalRemaining === 0 ? 'MATCHED' : 'PARTIAL',
-    })
-  }
-  if (chol.length > 0) {
-    const o = chol[0]
-    bets.push({
-      player: 'Mabior Chol',
-      market: 'Goals - Mabior Chol',
-      selection: 'Over 1.5 Goals',
-      odds: 2.06,
-      stake: 100,
-      matched: o.matched || 0,
-      unmatched: o.remaining || 0,
-      potential_profit: (o.matched || 0) * (2.06 - 1) * 0.95,
-      game: 'Hawthorn v Sydney Swans',
-      bet_id: o.bet_id,
-      status: (o.remaining || 0) === 0 ? 'MATCHED' : 'PARTIAL',
-    })
-  }
-  return bets
 }
 
 export function DashboardPage() {
   const { data: bets, isLoading, error } = useAllBets()
-  const viewMode = useViewMode()
+  useViewMode() // sync mode
   const sportMode = useSportMode()
   const sportKey = SPORT_MODE_TO_KEY[sportMode] || ''
   useRealtimeBets()
@@ -180,9 +155,7 @@ export function DashboardPage() {
   if (error) return <div className="text-red-400">Error loading data: {error.message}</div>
 
   const rawBets = bets || []
-  const allBets = viewMode === 'live'
-    ? rawBets.filter(b => b.notes?.includes('LIVE'))
-    : rawBets.filter(b => !b.notes?.includes('LIVE'))
+  const allBets = rawBets
   const isDemo = !config || (config['woods_mode'] as string) !== 'live'
 
   const overlays = topOverlays || []
@@ -206,7 +179,7 @@ export function DashboardPage() {
         <div className="rounded-xl border-2 border-cyan-500/30 bg-gray-900 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-white">Live Betfair Bets</h3>
-            <span className="text-xs text-cyan-400">Betfair Balance: $2,300 AUD</span>
+            <span className="text-xs text-cyan-400">{LIVE_BETS.length} active bets — ${LIVE_BETS.reduce((s, b) => s + b.stake, 0)} staked</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-gray-300">
