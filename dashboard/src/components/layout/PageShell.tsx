@@ -1,13 +1,15 @@
-import { useState, createContext, useContext } from 'react'
+import { useState, useEffect, createContext, useContext } from 'react'
 import { Outlet } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
+import { supabase } from '../../lib/supabase'
 
 type ViewMode = 'demo' | 'live'
 type SportMode = 'nba' | 'racing' | 'afl' | 'soccer'
 
-const ViewModeContext = createContext<ViewMode>('demo')
-const SportModeContext = createContext<SportMode>('nba')
+const ViewModeContext = createContext<ViewMode>('live')
+const SportModeContext = createContext<SportMode>('racing')
 
 export function useViewMode() {
   return useContext(ViewModeContext)
@@ -19,8 +21,22 @@ export function useSportMode() {
 
 export function PageShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('demo')
+  const [viewMode, setViewMode] = useState<ViewMode>('live')
   const [sportMode, setSportMode] = useState<SportMode>('racing')
+
+  // Sync viewMode from system_config
+  const { data: configMode } = useQuery({
+    queryKey: ['woods_mode_sync'],
+    queryFn: async () => {
+      const { data } = await supabase.from('system_config').select('value').eq('key', 'woods_mode').single()
+      return (data?.value as string) || 'live'
+    },
+    refetchInterval: 30000,
+  })
+
+  useEffect(() => {
+    if (configMode) setViewMode(configMode as ViewMode)
+  }, [configMode])
 
   return (
     <ViewModeContext.Provider value={viewMode}>
