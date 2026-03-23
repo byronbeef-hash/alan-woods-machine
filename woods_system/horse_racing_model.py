@@ -26,6 +26,7 @@ from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
 from betfair_client import BetfairClient
+from racing_scraper import RacingScraper, enforce_betting_rules, is_gallops_race
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +117,7 @@ class HorseRacingModel:
 
     def __init__(self):
         self.bf = BetfairClient()
+        self.scraper = RacingScraper()
         self._logged_in = False
 
     def _ensure_login(self):
@@ -192,6 +194,36 @@ class HorseRacingModel:
         flb_factor = self._get_flb_factor(back_price)
         combined_factor *= flb_factor
         adjustments['flb'] = round(flb_factor - 1, 3)
+
+        # 8b. MARKET CONFIDENCE — lay liquidity as proxy for smart money
+        # If lots of lay money = market is confident in the price (less opportunity)
+        # If little lay money on a mid-range horse = potential mispricing
+        lay_price = runner.get('ex', {}).get('availableToLay', [{}])[0].get('price', 0) if isinstance(runner.get('ex'), dict) else 0
+        lay_size = runner.get('ex', {}).get('availableToLay', [{}])[0].get('size', 0) if isinstance(runner.get('ex'), dict) else 0
+        back_avail = runner.get('ex', {}).get('availableToBack', [{}])[0].get('size', 0) if isinstance(runner.get('ex'), dict) else 0
+        # Spread = difference between back and lay price
+        # Tight spread = efficient pricing, wide spread = potential opportunity
+        if lay_price > 0 and back_price > 0:
+            spread_pct = (lay_price - back_price) / back_price
+            if spread_pct > 0.10:  # Wide spread = less efficient = slight opportunity
+                spread_factor = 1.02
+            elif spread_pct < 0.02:  # Tight spread = very efficient = harder to beat
+                spread_factor = 0.98
+            else:
+                spread_factor = 1.0
+            combined_factor *= spread_factor
+            adjustments['spread'] = round(spread_factor - 1, 3)
+
+        # 8c. FIELD SIZE ADJUSTMENT
+        # Larger fields = more variance = longshots hit more often
+        if field_size >= 14:
+            field_factor = 1.02 if back_price > 8 else 0.99
+        elif field_size <= 6:
+            field_factor = 0.98 if back_price > 8 else 1.01
+        else:
+            field_factor = 1.0
+        combined_factor *= field_factor
+        adjustments['field_size'] = round(field_factor - 1, 3)
 
         # 9. TRACK CONDITION (from FormFav)
         if track_condition:
@@ -563,24 +595,20 @@ class HorseRacingModel:
         except Exception:
             race_date = datetime.now().strftime('%Y-%m-%d')
 
-        # Fetch FormFav data for this meeting
+        # Fetch weather and track data from free sources
         track_condition = None
         weather_data = None
         formfav_runners = {}
         try:
-            from track_weather import TrackWeatherService
-            tw = TrackWeatherService()
-            meeting_data = tw.get_meeting_conditions(venue_slug, race_date or datetime.now().strftime('%Y-%m-%d'))
-            track_condition = meeting_data.get('condition')
-            formfav_runners = meeting_data.get('runners', {})
+            meeting_info = self.scraper.enrich_meeting(venue, race_date or datetime.now().strftime('%Y-%m-%d'))
+            track_condition = meeting_info.get('track_condition')
+            weather_data = meeting_info.get('weather')
             if track_condition:
-                print(f"    Track: {track_condition} | Weather: {meeting_data.get('weather', '?')}")
-
-            weather_data = tw.get_weather_forecast(venue)
-            if weather_data.get('rain_mm', 0) > 0:
-                print(f"    Rain: {weather_data['rain_mm']}mm | Temp: {weather_data.get('temperature', '?')}C")
+                print(f"    Track: {track_condition} | Weather: {meeting_info.get('weather_summary', '?')}")
+            elif weather_data:
+                print(f"    Weather: {meeting_info.get('weather_summary', '?')}")
         except Exception as e:
-            print(f"    [Track/Weather] {e}")
+            print(f"    [Weather] Error for {venue}: {e}")
 
         # Fetch both WIN and PLACE markets
         market_types = ['WIN']
@@ -805,14 +833,24 @@ def auto_bet(results: list[dict], max_bets: int = 10, bankroll: float = 2500.0,
     Returns:
         List of placed bet records
     """
-    overlays = [r for r in results
-                if r['we_net'] >= min_we
-                and r['back_size'] >= 30  # Minimum liquidity
-                and r['back_price'] >= 1.50  # Avoid unbackable favs
-                and r['back_price'] <= 50.0]  # Avoid crazy longshots
+    # Pre-filter by W.E., liquidity, price range
+    candidates = [r for r in results
+                  if r['we_net'] >= min_we
+                  and r['back_size'] >= 30  # Minimum liquidity
+                  and r['back_price'] >= 1.50  # Avoid unbackable favs
+                  and r['back_price'] <= 50.0]  # Avoid crazy longshots
 
-    # Sort by W.E. descending (best overlays first)
-    overlays.sort(key=lambda x: x['we_net'], reverse=True)
+    # SAFETY: Apply betting rules — 1 per race, gallops only, no broken model races
+    overlays = enforce_betting_rules(
+        candidates,
+        max_per_race=1,
+        min_field_size=6,
+        gallops_only=True,
+    )
+
+    if len(candidates) != len(overlays):
+        removed = len(candidates) - len(overlays)
+        print(f"  Safety rules removed {removed} bets (harness/same-race/small-field)")
 
     bets_placed = []
     total_staked = 0
