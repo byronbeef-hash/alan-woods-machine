@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { fetchSystemConfig } from '../../lib/queries'
+import { fetchSystemConfig, updateSystemConfig } from '../../lib/queries'
 
 type SportMode = 'nba' | 'racing' | 'afl' | 'soccer'
 
@@ -21,6 +21,17 @@ interface HeaderProps {
 
 export function Header({ onMenuToggle, viewMode, onViewModeChange, sportMode, onSportModeChange }: HeaderProps) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const handleModeChange = async (mode: 'demo' | 'live') => {
+    onViewModeChange(mode)
+    await updateSystemConfig('woods_mode', mode)
+    queryClient.invalidateQueries({ queryKey: ['woods_mode_sync'] })
+    queryClient.invalidateQueries({ queryKey: ['system-config'] })
+    queryClient.invalidateQueries({ queryKey: ['planner_config'] })
+    queryClient.invalidateQueries({ queryKey: ['planner_live_status'] })
+  }
+
   const { data: config } = useQuery({
     queryKey: ['system-config'],
     queryFn: fetchSystemConfig,
@@ -78,7 +89,7 @@ export function Header({ onMenuToggle, viewMode, onViewModeChange, sportMode, on
         {/* View toggle — switches which data you see */}
         <div className="flex rounded-full border border-gray-700 overflow-hidden">
           <button
-            onClick={() => onViewModeChange('demo')}
+            onClick={() => handleModeChange('demo')}
             className={`px-3 py-1 text-xs font-bold transition-colors ${
               viewMode === 'demo'
                 ? 'bg-emerald-500/20 text-emerald-400'
@@ -88,7 +99,7 @@ export function Header({ onMenuToggle, viewMode, onViewModeChange, sportMode, on
             Demo
           </button>
           <button
-            onClick={() => onViewModeChange('live')}
+            onClick={() => handleModeChange('live')}
             className={`px-3 py-1 text-xs font-bold transition-colors ${
               viewMode === 'live'
                 ? 'bg-red-500/20 text-red-400'
