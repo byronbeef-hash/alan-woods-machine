@@ -191,7 +191,11 @@ export function DashboardPage() {
         <div className="rounded-xl border-2 border-cyan-500/30 bg-gray-900 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-white">Live Betfair Bets</h3>
-            <span className="text-xs text-cyan-400">{LIVE_BETS.length} active bets — ${LIVE_BETS.reduce((s, b) => s + b.stake, 0)} staked</span>
+            <div className="flex items-center gap-4">
+              <span className="text-xs text-gray-400">{LIVE_BETS.length} bets</span>
+              <span className="text-xs font-mono font-bold text-white">Staked: ${LIVE_BETS.reduce((s, b) => s + b.stake, 0)}</span>
+              <span className="text-xs font-mono font-bold text-emerald-400">Potential Win: +${LIVE_BETS.reduce((s, b) => s + b.potential_profit, 0).toFixed(0)}</span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-gray-300">
