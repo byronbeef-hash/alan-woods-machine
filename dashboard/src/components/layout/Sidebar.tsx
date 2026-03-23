@@ -6,6 +6,7 @@ type SportMode = 'nba' | 'racing' | 'afl' | 'soccer'
 
 const commonItems = [
   { to: '/', label: 'Dashboard', icon: '~' },
+  { to: '/betfair', label: 'Betfair', icon: 'B' },
   { to: '/live-stake', label: 'Live Stake', icon: '$' },
   { to: '/daily', label: 'Daily', icon: '+' },
 ]
