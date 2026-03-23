@@ -401,17 +401,17 @@ export function DailyPage() {
               <div className="grid grid-cols-5 gap-2">
                 <div>
                   <span className="text-[10px] text-gray-500 block">P&L</span>
-                  <span className={`text-sm font-mono font-bold ${status.dailySummary.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {status.dailySummary.pnl >= 0 ? '+' : ''}${status.dailySummary.pnl.toFixed(2)}
+                  <span className={`text-sm font-mono font-bold ${(status.dailySummary.pnl ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {(status.dailySummary.pnl ?? 0) >= 0 ? '+' : ''}${(status.dailySummary.pnl ?? 0).toFixed(2)}
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-gray-500 block">Record</span>
-                  <span className="text-sm font-mono font-bold text-white">{status.dailySummary.wins}W / {status.dailySummary.losses}L</span>
+                  <span className="text-sm font-mono font-bold text-white">{status.dailySummary.wins ?? 0}W / {status.dailySummary.losses ?? 0}L</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-gray-500 block">Win Rate</span>
-                  <span className="text-sm font-mono font-bold text-white">{status.dailySummary.win_rate}%</span>
+                  <span className="text-sm font-mono font-bold text-white">{status.dailySummary.win_rate ?? 0}%</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-gray-500 block">Pending</span>

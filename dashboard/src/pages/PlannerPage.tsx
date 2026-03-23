@@ -442,7 +442,8 @@ export function PlannerPage() {
   const [stakes, setStakes] = useState<Record<number, number>>({})
   const [placedIds, setPlacedIds] = useState<Set<number>>(new Set())
   const [placingIds, setPlacingIds] = useState<Set<number>>(new Set())
-  const [budgetPct, setBudgetPct] = useState(DEFAULT_BUDGET_PCT)
+  const [totalStakeInput, setTotalStakeInput] = useState(DEFAULT_BUDGET_PCT)
+  const [profitTarget] = useState(500)
   const [budgetApplied, setBudgetApplied] = useState(false)
 
   // Fetch live config for bankroll, budget, mode
@@ -481,7 +482,6 @@ export function PlannerPage() {
 
   const bets = overlayBets || []
   const overlays = bets.filter(b => b.verdict === 'OVERLAY')
-  const marginals = bets.filter(b => b.verdict === 'MARGINAL')
 
   const getStake = (o: RacingOverlayRow) => Math.min(stakes[o.id] ?? kellyStake(o.we_net, BANKROLL, o.back_price, o.back_size), MAX_BET)
   const setStake = (id: number, val: number) => setStakes(prev => ({ ...prev, [id]: val }))
@@ -557,56 +557,91 @@ export function PlannerPage() {
         queryClient={queryClient}
       />
 
-      {/* Total Stake */}
+      {/* Profit Target & Stake Control */}
       {bets.length > 0 && (
-        <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-white">Total Stake</h3>
-              <p className="text-[10px] text-gray-500 mt-0.5">
-                Set total amount to spread across overlay bets using Kelly proportions
-              </p>
+        <div className="rounded-xl border-2 border-cyan-500/30 bg-gray-900 p-5 space-y-4">
+          {/* Profit target vs forecast */}
+          <div className="grid grid-cols-4 gap-3">
+            <div className="rounded-lg bg-gray-800 p-3">
+              <span className="text-[10px] text-gray-500 block">Daily Profit Target</span>
+              <span className="text-xl font-mono font-bold text-cyan-400">${profitTarget}</span>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5">
-                {[50, 100, 180, 250, 500].map(amt => (
-                  <button
-                    key={amt}
-                    onClick={() => setBudgetPct(amt)}
-                    className={`rounded px-2.5 py-1 text-xs font-bold transition-colors ${
-                      budgetPct === amt
-                        ? 'bg-cyan-600 text-white'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                    }`}
-                  >${amt}</button>
-                ))}
-              </div>
-              <div className="flex items-center gap-1">
+            <div className="rounded-lg bg-gray-800 p-3">
+              <span className="text-[10px] text-gray-500 block">Forecast Profit (if all win)</span>
+              <span className={`text-xl font-mono font-bold ${totalPotentialProfit >= profitTarget ? 'text-emerald-400' : 'text-amber-400'}`}>
+                +${totalPotentialProfit.toFixed(0)}
+              </span>
+            </div>
+            <div className="rounded-lg bg-gray-800 p-3">
+              <span className="text-[10px] text-gray-500 block">Expected Profit (EV)</span>
+              <span className="text-xl font-mono font-bold text-emerald-400">
+                +${overlays.reduce((s, o) => {
+                  const st = getStake(o)
+                  const ev = st * ((o.back_price - 1) * 0.95 * o.model_prob - (1 - o.model_prob))
+                  return s + ev
+                }, 0).toFixed(0)}
+              </span>
+            </div>
+            <div className="rounded-lg bg-gray-800 p-3">
+              <span className="text-[10px] text-gray-500 block">Total Stake</span>
+              <span className="text-xl font-mono font-bold text-white">${totalStake}</span>
+              <span className="text-[10px] text-gray-500 block">{overlays.length} bets</span>
+            </div>
+          </div>
+
+          {/* Progress bar toward target */}
+          <div>
+            <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1">
+              <span>Forecast vs Target</span>
+              <span>{Math.min(100, Math.round(totalPotentialProfit / profitTarget * 100))}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-gray-800 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${totalPotentialProfit >= profitTarget ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                style={{ width: `${Math.min(100, (totalPotentialProfit / profitTarget) * 100)}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Stake allocation */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">Set total stake:</span>
+              {[100, 180, 250, 500].map(amt => (
+                <button
+                  key={amt}
+                  onClick={() => setTotalStakeInput(amt)}
+                  className={`rounded px-2.5 py-1 text-xs font-bold transition-colors ${
+                    totalStakeInput === amt ? 'bg-cyan-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  }`}
+                >${amt}</button>
+              ))}
+              <div className="flex items-center gap-1 ml-1">
                 <span className="text-gray-500 text-sm">$</span>
                 <input
                   type="number"
                   min={10}
                   max={5000}
-                  value={budgetPct}
-                  onChange={e => setBudgetPct(Math.max(10, parseInt(e.target.value) || 100))}
+                  value={totalStakeInput}
+                  onChange={e => setTotalStakeInput(Math.max(10, parseInt(e.target.value) || 180))}
                   className="w-20 rounded border border-gray-600 bg-gray-800 px-2 py-1.5 text-sm font-mono font-bold text-white text-center focus:border-cyan-500 focus:outline-none"
                 />
               </div>
-              <button
-                onClick={() => {
-                  const alloc = allocateBudget(budgetPct, bets, BANKROLL)
-                  setStakes(prev => ({ ...prev, ...alloc }))
-                  setBudgetApplied(true)
-                }}
-                className="rounded-lg bg-cyan-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-cyan-500"
-              >
-                Allocate ${budgetPct}
-              </button>
             </div>
+            <button
+              onClick={() => {
+                const alloc = allocateBudget(totalStakeInput, bets, BANKROLL)
+                setStakes(prev => ({ ...prev, ...alloc }))
+                setBudgetApplied(true)
+              }}
+              className="rounded-lg bg-cyan-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-cyan-500"
+            >
+              Allocate ${totalStakeInput}
+            </button>
           </div>
           {budgetApplied && (
-            <p className="text-[10px] text-cyan-400 mt-2">
-              ${budgetPct} allocated across {overlays.filter(o => (stakes[o.id] ?? 0) > 0).length} overlay bets using Kelly proportions. Edit individual stakes below.
+            <p className="text-[10px] text-cyan-400">
+              ${totalStakeInput} allocated across {overlays.filter(o => (stakes[o.id] ?? 0) > 0).length} overlay bets. Forecast profit: +${totalPotentialProfit.toFixed(0)} (target: ${profitTarget}).
             </p>
           )}
         </div>
@@ -622,29 +657,66 @@ export function PlannerPage() {
         </div>
       )}
 
-      {/* Summary */}
-      {bets.length > 0 && (
-        <div className="grid grid-cols-5 gap-3">
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-            <p className="text-[10px] text-gray-500">Overlays</p>
-            <p className="text-lg font-bold font-mono text-emerald-400">{overlays.length}</p>
+      {/* Per-Bet Profit Forecast Table */}
+      {overlays.length > 0 && (
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+          <h3 className="text-sm font-bold text-white mb-3">Bet Forecast</h3>
+          <div className="overflow-hidden rounded-lg border border-gray-800">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-800/50 text-gray-500">
+                  <th className="px-3 py-2 text-left font-medium">Selection</th>
+                  <th className="px-3 py-2 text-right font-medium">Odds</th>
+                  <th className="px-3 py-2 text-right font-medium">Edge</th>
+                  <th className="px-3 py-2 text-right font-medium">W.E.</th>
+                  <th className="px-3 py-2 text-right font-medium">Stake</th>
+                  <th className="px-3 py-2 text-right font-medium">If Wins</th>
+                  <th className="px-3 py-2 text-right font-medium">EV</th>
+                  <th className="px-3 py-2 text-right font-medium">Win Prob</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overlays.map((o, i) => {
+                  const st = getStake(o)
+                  const profit = st * ((o.back_price - 1) * 0.95)
+                  const ev = st * ((o.back_price - 1) * 0.95 * o.model_prob - (1 - o.model_prob))
+                  return (
+                    <tr key={i} className="border-t border-gray-800/50 hover:bg-gray-800/30">
+                      <td className="px-3 py-2 text-white font-medium">{o.name}</td>
+                      <td className="px-3 py-2 text-right font-mono text-white">{o.back_price.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-emerald-400">+{(o.edge * 100).toFixed(1)}%</td>
+                      <td className="px-3 py-2 text-right font-mono text-cyan-400">{o.we_net.toFixed(3)}</td>
+                      <td className="px-3 py-2 text-right font-mono font-bold text-white">${st}</td>
+                      <td className="px-3 py-2 text-right font-mono font-bold text-emerald-400">+${profit.toFixed(0)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-emerald-400">+${ev.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-gray-400">{(o.model_prob * 100).toFixed(0)}%</td>
+                    </tr>
+                  )
+                })}
+                <tr className="border-t-2 border-cyan-500/30 bg-cyan-500/5">
+                  <td className="px-3 py-2 text-white font-bold">TOTAL</td>
+                  <td className="px-3 py-2"></td>
+                  <td className="px-3 py-2"></td>
+                  <td className="px-3 py-2"></td>
+                  <td className="px-3 py-2 text-right font-mono font-bold text-white">${totalStake}</td>
+                  <td className="px-3 py-2 text-right font-mono font-bold text-emerald-400">+${totalPotentialProfit.toFixed(0)}</td>
+                  <td className="px-3 py-2 text-right font-mono font-bold text-emerald-400">
+                    +${overlays.reduce((s, o) => {
+                      const st = getStake(o)
+                      return s + st * ((o.back_price - 1) * 0.95 * o.model_prob - (1 - o.model_prob))
+                    }, 0).toFixed(2)}
+                  </td>
+                  <td className="px-3 py-2"></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-            <p className="text-[10px] text-gray-500">Marginals</p>
-            <p className="text-lg font-bold font-mono text-amber-400">{marginals.length}</p>
-          </div>
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-            <p className="text-[10px] text-gray-500">Best W.E.</p>
-            <p className="text-lg font-bold font-mono text-emerald-400">{Math.max(...bets.map(b => b.we_net)).toFixed(3)}</p>
-          </div>
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-            <p className="text-[10px] text-gray-500">Total Stake</p>
-            <p className="text-lg font-bold font-mono text-white">${totalStake}</p>
-          </div>
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-            <p className="text-[10px] text-gray-500">Potential Profit</p>
-            <p className="text-lg font-bold font-mono text-emerald-400">+${totalPotentialProfit.toFixed(0)}</p>
-          </div>
+          <p className="text-[10px] text-gray-600 mt-2">
+            "If Wins" = profit from that single bet winning (after 5% commission). "EV" = expected value based on model probability.
+            Target: ${profitTarget}/day. {totalPotentialProfit >= profitTarget
+              ? 'All bets winning would exceed target.'
+              : `Need ${Math.ceil((profitTarget - totalPotentialProfit) / ((Math.max(...overlays.map(o => o.back_price)) - 1) * 0.95))} more at top odds to reach target.`}
+          </p>
         </div>
       )}
 
