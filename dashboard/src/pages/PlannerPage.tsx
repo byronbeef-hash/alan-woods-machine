@@ -405,7 +405,7 @@ function ExplanationPanel({ overlay, bankroll, stake }: { overlay: RacingOverlay
 // ---------------------------------------------------------------------------
 
 const DEFAULT_BANKROLL = 2500
-const DEFAULT_BUDGET_PCT = 10
+const DEFAULT_BUDGET_PCT = 180
 
 function allocateBudget(budget: number, overlays: RacingOverlayRow[], bankroll: number): Record<number, number> {
   // Allocate budget proportionally to Kelly stake recommendations
@@ -557,60 +557,56 @@ export function PlannerPage() {
         queryClient={queryClient}
       />
 
-      {/* Daily Budget */}
+      {/* Total Stake */}
       {bets.length > 0 && (
         <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-bold text-white">Daily Budget</h3>
+              <h3 className="text-sm font-bold text-white">Total Stake</h3>
               <p className="text-[10px] text-gray-500 mt-0.5">
-                Set % of bankroll (${BANKROLL.toLocaleString()}) to allocate. Daily budget: ${DAILY_BUDGET}, max bet: ${MAX_BET}
+                Set total amount to spread across overlay bets using Kelly proportions
               </p>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5">
-                {[5, 10, 15, 20].map(pct => (
+                {[50, 100, 180, 250, 500].map(amt => (
                   <button
-                    key={pct}
-                    onClick={() => setBudgetPct(pct)}
+                    key={amt}
+                    onClick={() => setBudgetPct(amt)}
                     className={`rounded px-2.5 py-1 text-xs font-bold transition-colors ${
-                      budgetPct === pct
+                      budgetPct === amt
                         ? 'bg-cyan-600 text-white'
                         : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                     }`}
-                  >{pct}%</button>
+                  >${amt}</button>
                 ))}
-                <div className="flex items-center gap-1 ml-1">
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={budgetPct}
-                    onChange={e => setBudgetPct(Math.max(1, Math.min(50, parseInt(e.target.value) || 10)))}
-                    className="w-14 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-xs font-mono font-bold text-white text-center focus:border-cyan-500 focus:outline-none"
-                  />
-                  <span className="text-gray-500 text-xs">%</span>
-                </div>
               </div>
-              <div className="text-right min-w-[80px]">
-                <span className="text-lg font-mono font-bold text-cyan-400">${Math.round(BANKROLL * budgetPct / 100)}</span>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500 text-sm">$</span>
+                <input
+                  type="number"
+                  min={10}
+                  max={5000}
+                  value={budgetPct}
+                  onChange={e => setBudgetPct(Math.max(10, parseInt(e.target.value) || 100))}
+                  className="w-20 rounded border border-gray-600 bg-gray-800 px-2 py-1.5 text-sm font-mono font-bold text-white text-center focus:border-cyan-500 focus:outline-none"
+                />
               </div>
               <button
                 onClick={() => {
-                  const budget = Math.round(BANKROLL * budgetPct / 100)
-                  const alloc = allocateBudget(budget, bets, BANKROLL)
+                  const alloc = allocateBudget(budgetPct, bets, BANKROLL)
                   setStakes(prev => ({ ...prev, ...alloc }))
                   setBudgetApplied(true)
                 }}
-                className="rounded-lg bg-cyan-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-cyan-500"
+                className="rounded-lg bg-cyan-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-cyan-500"
               >
-                {budgetApplied ? 'Re-Allocate' : 'Allocate'}
+                Allocate ${budgetPct}
               </button>
             </div>
           </div>
           {budgetApplied && (
             <p className="text-[10px] text-cyan-400 mt-2">
-              Budget of ${Math.round(BANKROLL * budgetPct / 100)} allocated across {overlays.filter(o => (stakes[o.id] ?? kellyStake(o.we_net, BANKROLL, o.back_price, o.back_size)) > 0).length} overlay bets using Kelly proportions. Edit individual stakes below.
+              ${budgetPct} allocated across {overlays.filter(o => (stakes[o.id] ?? 0) > 0).length} overlay bets using Kelly proportions. Edit individual stakes below.
             </p>
           )}
         </div>
