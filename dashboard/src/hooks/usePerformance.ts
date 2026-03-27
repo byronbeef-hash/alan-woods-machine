@@ -5,6 +5,6 @@ export function usePerformanceSnapshots() {
   return useQuery({
     queryKey: ['performance'],
     queryFn: fetchPerformanceSnapshots,
-    refetchInterval: 60000,
+    refetchInterval: 300000,
   })
 }

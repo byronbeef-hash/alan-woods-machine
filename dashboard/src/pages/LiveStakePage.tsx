@@ -184,7 +184,7 @@ export function LiveStakePage() {
   const { data, isLoading } = useQuery({
     queryKey: ['live_stake'],
     queryFn: fetchLiveStake,
-    refetchInterval: 30000,
+    refetchInterval: 300000,
   })
 
   if (isLoading || !data) {

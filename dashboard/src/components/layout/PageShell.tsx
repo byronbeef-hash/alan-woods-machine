@@ -31,7 +31,7 @@ export function PageShell() {
       const { data } = await supabase.from('system_config').select('value').eq('key', 'woods_mode').single()
       return (data?.value as string) || 'live'
     },
-    refetchInterval: 30000,
+    refetchInterval: 300000,
   })
 
   useEffect(() => {

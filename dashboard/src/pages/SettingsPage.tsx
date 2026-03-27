@@ -625,7 +625,7 @@ function RunnerHealthPanel() {
 
       return { heartbeat, lastActivity, overlayCount: overlayCount || 0, betCount: betCount || 0 }
     },
-    refetchInterval: 60000,
+    refetchInterval: 300000,
   })
 
   if (!data) return null

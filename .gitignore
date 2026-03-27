@@ -28,3 +28,4 @@ Thumbs.db
 dashboard/.env
 dashboard/node_modules/
 dashboard/dist/
+.github/

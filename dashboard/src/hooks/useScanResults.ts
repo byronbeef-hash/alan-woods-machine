@@ -8,7 +8,7 @@ export function useScanResults(filters: ScanFilters = {}) {
   return useQuery({
     queryKey: ['scan_results', filters],
     queryFn: () => fetchScanResults(filters),
-    refetchInterval: 30000,
+    refetchInterval: 300000,
   })
 }
 

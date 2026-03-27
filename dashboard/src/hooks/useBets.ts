@@ -8,7 +8,7 @@ export function useAllBets() {
   return useQuery({
     queryKey: ['bets', 'all'],
     queryFn: fetchAllBets,
-    refetchInterval: 60000,
+    refetchInterval: 300000,
   })
 }
 
@@ -16,7 +16,7 @@ export function useSettledBets() {
   return useQuery({
     queryKey: ['bets', 'settled'],
     queryFn: fetchSettledBets,
-    refetchInterval: 60000,
+    refetchInterval: 300000,
   })
 }
 
@@ -24,7 +24,7 @@ export function usePendingBets() {
   return useQuery({
     queryKey: ['bets', 'pending'],
     queryFn: fetchPendingBets,
-    refetchInterval: 30000,
+    refetchInterval: 300000,
   })
 }
 
@@ -32,7 +32,7 @@ export function useFilteredBets(filters: BetFilters) {
   return useQuery({
     queryKey: ['bets', 'filtered', filters],
     queryFn: () => fetchFilteredBets(filters),
-    refetchInterval: 60000,
+    refetchInterval: 300000,
   })
 }
 

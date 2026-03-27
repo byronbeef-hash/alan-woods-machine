@@ -458,7 +458,7 @@ export function PlannerPage() {
       for (const r of data || []) map[r.key] = r.value
       return map
     },
-    refetchInterval: 60000,
+    refetchInterval: 300000,
   })
 
   const BANKROLL = (sysConfig?.starting_bankroll as number) || DEFAULT_BANKROLL
@@ -469,7 +469,7 @@ export function PlannerPage() {
   const { data: overlayBets, isLoading } = useQuery({
     queryKey: ['planner_overlays'],
     queryFn: fetchPlannerOverlays,
-    refetchInterval: 30000,
+    refetchInterval: 300000,
   })
 
   const scanMutation = useMutation({
@@ -924,7 +924,7 @@ function LiveProgramPanel({ isLive, bankroll, dailyBudget, maxBet, queryClient }
         summary,
       }
     },
-    refetchInterval: 30000,
+    refetchInterval: 300000,
   })
 
   const toggleLive = async () => {

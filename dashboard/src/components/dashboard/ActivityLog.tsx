@@ -38,7 +38,7 @@ export function ActivityLog() {
   const { data: config } = useQuery({
     queryKey: ['system-config'],
     queryFn: fetchSystemConfig,
-    refetchInterval: 30000,
+    refetchInterval: 300000,
   })
 
   const rawLog = (config?.['activity_log'] as LogEntry[]) || []

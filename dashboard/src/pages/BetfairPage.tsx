@@ -101,7 +101,7 @@ export function BetfairPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['betfair_page'],
     queryFn: fetchBetfairData,
-    refetchInterval: 30000,
+    refetchInterval: 300000,
   })
 
   if (isLoading || !data) {

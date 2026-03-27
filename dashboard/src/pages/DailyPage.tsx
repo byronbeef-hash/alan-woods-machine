@@ -282,13 +282,13 @@ export function DailyPage() {
   const { data: status } = useQuery({
     queryKey: ['system_status'],
     queryFn: fetchSystemStatus,
-    refetchInterval: 60000,
+    refetchInterval: 300000,
   })
 
   const { data: overlays } = useQuery({
     queryKey: ['daily_overlays', strategy.sport],
     queryFn: () => fetchTodayOverlays(strategy.sport),
-    refetchInterval: 30000,
+    refetchInterval: 300000,
   })
 
   const scanMutation = useMutation({

@@ -117,7 +117,7 @@ export function HorseRacingPage() {
   const { data: overlays, isLoading, error } = useQuery({
     queryKey: ['racing_overlays'],
     queryFn: fetchRacingOverlays,
-    refetchInterval: 60000,
+    refetchInterval: 300000,
   })
 
   const scanMutation = useMutation({

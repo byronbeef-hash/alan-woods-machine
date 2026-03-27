@@ -57,7 +57,7 @@ export function ResultsPage() {
   const { data: allBets, isLoading } = useQuery({
     queryKey: ['results_settled_bets'],
     queryFn: fetchSettledBets,
-    refetchInterval: 60000,
+    refetchInterval: 300000,
   })
 
   const filteredBets = useMemo(() => {

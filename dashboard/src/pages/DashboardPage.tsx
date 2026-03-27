@@ -155,13 +155,13 @@ export function DashboardPage() {
   const { data: topOverlays } = useQuery({
     queryKey: ['top_overlays', sportKey],
     queryFn: () => fetchTopOverlays(sportKey),
-    refetchInterval: 60000,
+    refetchInterval: 300000,
   })
 
   const { data: liveBetsData } = useQuery({
     queryKey: ['live_betfair_bets'],
     queryFn: fetchLiveBets,
-    refetchInterval: 60000, // Check every 60 seconds
+    refetchInterval: 300000, // Check every 60 seconds
   })
 
   if (isLoading) return <LoadingSpinner />
