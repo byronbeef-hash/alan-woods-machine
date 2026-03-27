@@ -767,6 +767,49 @@ class HorseRacingModel:
         all_results.sort(key=lambda x: x['we_net'], reverse=True)
         return all_results
 
+    @staticmethod
+    def filter_safe_overlays(results: list[dict]) -> list[dict]:
+        """Apply safety limits to prevent another Bathurst-style disaster.
+
+        Rules:
+        1. GALLOPS ONLY — exclude harness (Pace, Trot)
+        2. Max 1 bet per race — strongest overlay only
+        3. Max 3 bets per meeting — spread risk
+        4. Min 8 runners — skip small fields
+        5. Min 5% edge — raise threshold for quality
+        6. WIN markets only — skip PLACE for now
+        """
+        # Step 1: Gallops only
+        harness_keywords = ['Pace', 'Trot', 'Harness', 'pace', 'trot']
+        gallops = [r for r in results if not any(kw in (r.get('race') or '') for kw in harness_keywords)]
+
+        # Step 2: Overlays only with 5% edge minimum
+        overlays = [r for r in gallops if r.get('verdict') == 'OVERLAY' and (r.get('edge', 0)) >= 0.05]
+
+        # Step 3: WIN markets only
+        overlays = [r for r in overlays if r.get('bet_type', 'WIN') == 'WIN']
+
+        # Step 4: Min field size 8
+        overlays = [r for r in overlays if (r.get('field_size', 0) or 0) >= 8]
+
+        # Step 5: Max 1 per race (best WE)
+        best_per_race: dict[str, dict] = {}
+        for o in overlays:
+            race_key = f"{o.get('meeting', '')}-{o.get('race', '')}"
+            if race_key not in best_per_race or o['we_net'] > best_per_race[race_key]['we_net']:
+                best_per_race[race_key] = o
+
+        # Step 6: Max 3 per meeting
+        meeting_counts: dict[str, int] = {}
+        filtered = []
+        for o in sorted(best_per_race.values(), key=lambda x: x['we_net'], reverse=True):
+            meeting = o.get('meeting', '')
+            meeting_counts[meeting] = meeting_counts.get(meeting, 0) + 1
+            if meeting_counts[meeting] <= 3:
+                filtered.append(o)
+
+        return filtered
+
     def place_bet(self, market_id: str, selection_id: int,
                   stake: float, price: float) -> dict:
         """Place a BACK bet on Betfair Exchange."""

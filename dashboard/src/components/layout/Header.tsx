@@ -1,26 +1,15 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import { fetchSystemConfig, updateSystemConfig } from '../../lib/queries'
-
-type SportMode = 'nba' | 'racing' | 'afl' | 'soccer'
-
-const SPORT_TABS: { key: SportMode; label: string; icon: string; defaultRoute: string }[] = [
-  { key: 'racing', label: 'Horse Racing', icon: '🏇', defaultRoute: '/racing' },
-  { key: 'nba', label: 'NBA', icon: '🏀', defaultRoute: '/scanner' },
-  { key: 'afl', label: 'AFL', icon: '🏈', defaultRoute: '/overlays' },
-  { key: 'soccer', label: 'Soccer', icon: '⚽', defaultRoute: '/overlays' },
-]
 
 interface HeaderProps {
   onMenuToggle: () => void
   viewMode: 'demo' | 'live'
   onViewModeChange: (mode: 'demo' | 'live') => void
-  sportMode: SportMode
-  onSportModeChange: (mode: SportMode) => void
+  sportMode?: string
+  onSportModeChange?: (mode: string) => void
 }
 
-export function Header({ onMenuToggle, viewMode, onViewModeChange, sportMode, onSportModeChange }: HeaderProps) {
-  const navigate = useNavigate()
+export function Header({ onMenuToggle, viewMode, onViewModeChange }: HeaderProps) {
   const queryClient = useQueryClient()
 
   const handleModeChange = async (mode: 'demo' | 'live') => {
@@ -28,8 +17,6 @@ export function Header({ onMenuToggle, viewMode, onViewModeChange, sportMode, on
     await updateSystemConfig('woods_mode', mode)
     queryClient.invalidateQueries({ queryKey: ['woods_mode_sync'] })
     queryClient.invalidateQueries({ queryKey: ['system-config'] })
-    queryClient.invalidateQueries({ queryKey: ['planner_config'] })
-    queryClient.invalidateQueries({ queryKey: ['planner_live_status'] })
   }
 
   const { data: config } = useQuery({
@@ -41,7 +28,6 @@ export function Header({ onMenuToggle, viewMode, onViewModeChange, sportMode, on
 
   return (
     <header className="flex h-14 items-center border-b border-gray-800 bg-gray-950 px-4 lg:px-6">
-      {/* Hamburger menu - mobile only */}
       <button
         onClick={onMenuToggle}
         className="mr-3 flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white lg:hidden"
@@ -58,35 +44,15 @@ export function Header({ onMenuToggle, viewMode, onViewModeChange, sportMode, on
         <h1 className="text-base lg:text-lg font-bold text-white">Woods System</h1>
       </div>
 
-      {/* Sport tabs */}
-      <div className="ml-4 flex items-center gap-1 overflow-x-auto">
-        {SPORT_TABS.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => { onSportModeChange(tab.key); navigate(tab.defaultRoute) }}
-            className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              sportMode === tab.key
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'
-            }`}
-          >
-            <span>{tab.icon}</span>
-            <span className="hidden sm:inline">{tab.label}</span>
-          </button>
-        ))}
-      </div>
-
       <div className="ml-auto flex items-center gap-2">
-        {/* Trading mode indicator */}
-        <span className={`hidden sm:inline text-[10px] px-2 py-0.5 rounded ${
+        <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
           tradingMode === 'live'
-            ? 'bg-red-500/10 text-red-400'
-            : 'bg-gray-800 text-gray-500'
+            ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+            : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
         }`}>
-          Trading: {tradingMode === 'live' ? 'LIVE' : 'DEMO'}
+          {tradingMode === 'live' ? 'LIVE' : 'DEMO'}
         </span>
 
-        {/* View toggle — switches which data you see */}
         <div className="flex rounded-full border border-gray-700 overflow-hidden">
           <button
             onClick={() => handleModeChange('demo')}

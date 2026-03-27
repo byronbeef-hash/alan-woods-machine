@@ -36,6 +36,23 @@ from notifications import NotificationManager
 from sports.registry import get_active_adapters, get_adapter
 import config
 
+
+# ─── Telegram Notifications ──────────────────────────────────────────────────
+
+def send_telegram(msg: str):
+    """Send notification via Telegram bot."""
+    token = os.getenv('TELEGRAM_BOT_TOKEN', '')
+    chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
+    if not token or not chat_id:
+        return
+    try:
+        import requests
+        requests.post(f'https://api.telegram.org/bot{token}/sendMessage',
+                      data={'chat_id': chat_id, 'text': msg, 'parse_mode': 'HTML'}, timeout=10)
+    except Exception:
+        pass
+
+
 # ─── Configuration from environment ───────────────────────────────────────────
 
 MODE = os.environ.get("WOODS_MODE", "demo")  # "demo" or "live"
@@ -420,6 +437,7 @@ def _check_manual_scan_requests():
         log.info("Manual scan request completed and cleared.")
     except Exception as e:
         log.exception(f"Error processing manual scan request: {e}")
+        send_telegram(f"Scanner error (manual scan): {e}")
 
 
 def _check_racing_scan_requests():
@@ -457,6 +475,7 @@ def _check_racing_scan_requests():
         log.info("Racing scan request cleared.")
     except Exception as e:
         log.exception(f"Error processing racing scan request: {e}")
+        send_telegram(f"Scanner error (racing scan): {e}")
         # Still try to clear the request so it doesn't loop
         try:
             from database import Database
@@ -576,6 +595,152 @@ def run_scan_for_sport(sport_key: str):
     return _run
 
 
+def run_autonomous_racing_scan():
+    """Autonomous racing scan: scan meetings, filter gallops, insert overlays, notify via Telegram."""
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            log.info(f"Autonomous racing scan (attempt {attempt}/{max_attempts})...")
+
+            from horse_racing_model import HorseRacingModel
+            model = HorseRacingModel()
+            results = model.scan_all_meetings(hours_ahead=72)
+
+            if not results:
+                log.info("Autonomous racing scan: no results found")
+                send_telegram("Racing scan: no meetings found")
+                return
+
+            # --- Filter: GALLOPS ONLY (exclude harness/trots/pace) ---
+            excluded_keywords = ("pace", "trot", "harness")
+            gallops = [
+                r for r in results
+                if not any(kw in (r.get('race', '') or '').lower() for kw in excluded_keywords)
+            ]
+            log.info(f"  Filtered to {len(gallops)} gallop runners (excluded {len(results) - len(gallops)} harness/trot/pace)")
+
+            # --- Safety limits ---
+            # Only OVERLAY verdicts
+            overlays = [r for r in gallops if r.get('verdict') == 'OVERLAY']
+
+            # Min field size 8
+            overlays = [r for r in overlays if r.get('field_size', 0) >= 8]
+
+            # Max 1 per race (best W.E.)
+            best_per_race = {}
+            for r in overlays:
+                race_key = r.get('market_id', r.get('race', ''))
+                if race_key not in best_per_race or r.get('we_net', 0) > best_per_race[race_key].get('we_net', 0):
+                    best_per_race[race_key] = r
+            overlays = list(best_per_race.values())
+
+            # Max 3 per meeting
+            from collections import defaultdict
+            meeting_counts = defaultdict(list)
+            for r in sorted(overlays, key=lambda x: x.get('we_net', 0), reverse=True):
+                meeting = r.get('meeting', '') or r.get('race', '').split(' ')[0]
+                if len(meeting_counts[meeting]) < 3:
+                    meeting_counts[meeting].append(r)
+            filtered = []
+            for runners in meeting_counts.values():
+                filtered.extend(runners)
+
+            log.info(f"  After safety limits: {len(filtered)} overlays from {len(meeting_counts)} meetings")
+
+            # --- Insert into database ---
+            if filtered:
+                import uuid as _uuid
+                scan_id = str(_uuid.uuid4())[:8]
+                from database import Database
+                db = Database()
+
+                # Ensure meeting field is populated
+                for r in filtered:
+                    if not r.get('meeting'):
+                        r['meeting'] = r.get('race', '').split(' ')[0] if r.get('race') else ''
+
+                inserted = db.insert_racing_overlays(filtered, scan_id)
+                log.info(f"  Inserted {inserted} racing overlays (scan {scan_id})")
+            else:
+                inserted = 0
+
+            # Count unique meetings scanned
+            meetings_scanned = len(set(
+                r.get('meeting', '') or r.get('race', '').split(' ')[0]
+                for r in gallops
+            ))
+
+            send_telegram(
+                f"<b>Racing Scan Complete</b>\n"
+                f"Scanned {meetings_scanned} meetings, {len(filtered)} overlays (gallops only)\n"
+                f"Total runners analysed: {len(gallops)}"
+            )
+            return  # Success, exit retry loop
+
+        except Exception as e:
+            log.exception(f"Autonomous racing scan error (attempt {attempt}): {e}")
+            if attempt < max_attempts:
+                log.info(f"  Retrying in 60 seconds...")
+                time.sleep(60)
+            else:
+                send_telegram(f"Racing scan FAILED after {max_attempts} attempts: {e}")
+
+
+def send_daily_summary():
+    """Send end-of-day Telegram summary of today's betting activity."""
+    try:
+        from database import Database
+        db = Database()
+        if not db.enabled:
+            return
+
+        today = datetime.now().strftime('%Y-%m-%d')
+        result = db.client.table("bets").select("*").gte(
+            "created_at", f"{today}T00:00:00"
+        ).lte("created_at", f"{today}T23:59:59").execute()
+
+        bets = result.data if result.data else []
+        if not bets:
+            send_telegram(f"<b>Daily Summary ({today})</b>\nNo bets placed today.")
+            return
+
+        wins = [b for b in bets if b.get('result') == 'WIN']
+        losses = [b for b in bets if b.get('result') == 'LOSS']
+        pending = [b for b in bets if b.get('result') == 'PENDING']
+        pnl = sum(b.get('pnl', 0) or 0 for b in bets if b.get('pnl') is not None)
+
+        # Get latest bankroll from most recent settled bet
+        settled = [b for b in bets if b.get('running_bankroll')]
+        bankroll = settled[-1]['running_bankroll'] if settled else 'N/A'
+        bankroll_str = f"${bankroll:,.2f}" if isinstance(bankroll, (int, float)) else bankroll
+
+        send_telegram(
+            f"<b>Daily Summary ({today})</b>\n"
+            f"{len(wins)}W/{len(losses)}L ({len(pending)} pending) | "
+            f"P&L: ${pnl:+,.2f} | Bankroll: {bankroll_str}"
+        )
+        log.info(f"Daily summary sent: {len(wins)}W/{len(losses)}L, P&L: ${pnl:+,.2f}")
+
+    except Exception as e:
+        log.exception(f"Error sending daily summary: {e}")
+        send_telegram(f"Daily summary error: {e}")
+
+
+def _refresh_betfair_session():
+    """Refresh Betfair session to prevent timeout."""
+    try:
+        from betfair_client import BetfairClient
+        bf = BetfairClient()
+        if bf.login():
+            balance = bf.get_balance()
+            log.info(f"Betfair session refreshed. Balance: ${balance:.2f}")
+        else:
+            log.warning("Betfair session refresh failed")
+            send_telegram("Betfair session refresh FAILED — check credentials")
+    except Exception as e:
+        log.warning(f"Betfair session refresh error: {e}")
+
+
 def start_scheduler():
     """Start the scheduled runner. Runs indefinitely until killed."""
     log.info("=" * 60)
@@ -598,6 +763,13 @@ def start_scheduler():
     schedule.every(30).seconds.do(_check_racing_scan_requests)
     schedule.every(30).minutes.do(_expire_racing_overlays)
     schedule.every(30).seconds.do(_check_mirror_bet_requests)
+
+    # Autonomous racing scan and daily summary
+    schedule.every(4).hours.do(run_autonomous_racing_scan)
+    schedule.every().day.at("20:00").do(send_daily_summary)
+
+    # Betfair session keep-alive
+    schedule.every(2).hours.do(_refresh_betfair_session)
 
     # Graceful shutdown
     def handle_signal(sig, frame):

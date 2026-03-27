@@ -2,61 +2,26 @@ import { NavLink } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '../../lib/auth'
 
-type SportMode = 'nba' | 'racing' | 'afl' | 'soccer'
-
-const commonItems = [
+const navItems = [
   { to: '/', label: 'Dashboard', icon: '~' },
-  { to: '/betfair', label: 'Betfair', icon: 'B' },
-  { to: '/live-stake', label: 'Live Stake', icon: '$' },
-  { to: '/daily', label: 'Daily', icon: '+' },
-]
-
-const sportNavItems: Record<SportMode, { to: string; label: string; icon: string }[]> = {
-  racing: [
-    { to: '/racing', label: 'Scanner', icon: '!' },
-    { to: '/overlays', label: 'Overlays', icon: '⚡' },
-    { to: '/planner', label: 'Planner', icon: '$' },
-    { to: '/results', label: 'Results', icon: '=' },
-    { to: '/bets', label: 'Bets', icon: '#' },
-  ],
-  nba: [
-    { to: '/scanner', label: 'Scanner', icon: '!' },
-    { to: '/overlays', label: 'Overlays', icon: '⚡' },
-    { to: '/bets', label: 'Bets', icon: '#' },
-  ],
-  afl: [
-    { to: '/overlays', label: 'Overlays', icon: '⚡' },
-    { to: '/bets', label: 'Bets', icon: '#' },
-  ],
-  soccer: [
-    { to: '/overlays', label: 'Overlays', icon: '⚡' },
-    { to: '/bets', label: 'Bets', icon: '#' },
-  ],
-}
-
-const bottomItems = [
-  { to: '/markets', label: 'Markets', icon: '%' },
+  { to: '/scanner', label: 'Scanner', icon: '!' },
+  { to: '/planner', label: 'Planner', icon: '$' },
+  { to: '/bets', label: 'Bets', icon: '#' },
+  { to: '/results', label: 'Results', icon: '=' },
   { to: '/settings', label: 'Settings', icon: '*' },
 ]
 
 interface SidebarProps {
   open: boolean
   onClose: () => void
-  sportMode?: SportMode
+  sportMode?: string
 }
 
-export function Sidebar({ open, onClose, sportMode = 'racing' }: SidebarProps) {
+export function Sidebar({ open, onClose }: SidebarProps) {
   const { signOut, user } = useAuth()
-
-  const navItems = [
-    ...commonItems,
-    ...(sportNavItems[sportMode] || sportNavItems.racing),
-    ...bottomItems,
-  ]
 
   return (
     <>
-      {/* Overlay for mobile */}
       {open && (
         <div
           className="fixed inset-0 z-30 bg-black/50 lg:hidden"
@@ -64,7 +29,6 @@ export function Sidebar({ open, onClose, sportMode = 'racing' }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar */}
       <nav
         className={clsx(
           'fixed inset-y-0 left-0 z-40 flex w-48 flex-col border-r border-gray-800 bg-gray-950 p-3 pt-16 transition-transform duration-200 lg:static lg:translate-x-0 lg:pt-3',
@@ -92,7 +56,6 @@ export function Sidebar({ open, onClose, sportMode = 'racing' }: SidebarProps) {
           ))}
         </div>
 
-        {/* Sign out */}
         <div className="mt-auto border-t border-gray-800 pt-3">
           <p className="truncate px-3 text-[10px] text-gray-600 mb-2">{user?.email}</p>
           <button

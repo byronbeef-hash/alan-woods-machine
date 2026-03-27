@@ -196,6 +196,19 @@ class Database:
             print(f"  [Supabase] Error fetching pending bets: {e}")
             return []
 
+    def get_todays_bets(self):
+        """Get all bets placed today."""
+        if not self.enabled:
+            return []
+        try:
+            from datetime import datetime, timezone
+            today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            result = self.client.table("bets").select("*").gte("created_at", f"{today}T00:00:00Z").execute()
+            return result.data or []
+        except Exception as e:
+            print(f"  [Supabase] Error fetching today's bets: {e}")
+            return []
+
     def save_performance_snapshot(self, metrics: dict):
         """Save a daily performance snapshot."""
         if not self.enabled:
@@ -502,19 +515,35 @@ class Database:
     # -------------------------------------------------------------------------
 
     def insert_racing_overlays(self, results: list[dict], scan_id: str) -> int:
-        """Write fresh racing overlay results. Only expires past races, preserves future ones."""
+        """Write fresh racing overlay results using upsert to prevent duplicates."""
         if not self.enabled or not results:
             return 0
 
-        # Only delete overlays for races that have ALREADY STARTED (expired)
-        # This preserves future race data so the dashboard always shows something
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Step 1: Delete overlays for races that have ALREADY STARTED (expired)
         try:
-            from datetime import datetime, timezone
-            now = datetime.now(timezone.utc).isoformat()
             self.client.table("racing_overlays").delete().lt("start_time", now).execute()
         except Exception as e:
             print(f"  [Supabase] Warning: could not expire old racing overlays: {e}")
 
+        # Step 2: Collect market_ids from this scan to delete stale data for these markets
+        incoming_market_ids = set()
+        for r in results:
+            mid = r.get("market_id", "")
+            if mid:
+                incoming_market_ids.add(mid)
+
+        # Delete existing records for markets we're about to refresh
+        if incoming_market_ids:
+            try:
+                for mid in incoming_market_ids:
+                    self.client.table("racing_overlays").delete().eq("market_id", mid).execute()
+            except Exception as e:
+                print(f"  [Supabase] Warning: could not clear existing overlays for refresh: {e}")
+
+        # Step 3: Build records and insert fresh data
         records = []
         for r in results:
             records.append({
@@ -556,20 +585,27 @@ class Database:
                 batch = records[i:i + 100]
                 self.client.table("racing_overlays").insert(batch).execute()
                 inserted += len(batch)
-            print(f"  [Supabase] Inserted {inserted} racing overlays (scan {scan_id})")
+            print(f"  [Supabase] Inserted {inserted} racing overlays across {len(incoming_market_ids)} markets (scan {scan_id})")
             return inserted
         except Exception as e:
             print(f"  [Supabase] Error inserting racing overlays: {e}")
             return 0
 
     def expire_racing_overlays(self, max_age_hours: int = 2):
-        """Delete racing overlays where the race has ALREADY STARTED (past start_time)."""
+        """Delete racing overlays where the race has ALREADY STARTED (past start_time).
+        Does NOT delete future race overlays regardless of age."""
         if not self.enabled:
             return
         try:
             from datetime import datetime, timezone
             now = datetime.now(timezone.utc).isoformat()
+            # Count before deleting for logging
+            count_result = self.client.table("racing_overlays").select("id", count="exact").lt("start_time", now).execute()
+            expired_count = count_result.count if hasattr(count_result, 'count') and count_result.count else 0
+            # Only delete overlays for races that have already started
             self.client.table("racing_overlays").delete().lt("start_time", now).execute()
+            if expired_count > 0:
+                print(f"  [Supabase] Expired {expired_count} overlays for races that have started")
         except Exception as e:
             print(f"  [Supabase] Error expiring racing overlays: {e}")
 

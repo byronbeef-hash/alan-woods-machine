@@ -5,15 +5,9 @@ import { PageShell } from './components/layout/PageShell'
 import { DashboardPage } from './pages/DashboardPage'
 import { ScannerPage } from './pages/ScannerPage'
 import { BetsPage } from './pages/BetsPage'
-import { MarketsPage } from './pages/MarketsPage'
 import { SettingsPage } from './pages/SettingsPage'
-import { OverlaysPage } from './pages/OverlaysPage'
-import { HorseRacingPage } from './pages/HorseRacingPage'
 import { PlannerPage } from './pages/PlannerPage'
 import { ResultsPage } from './pages/ResultsPage'
-import { DailyPage } from './pages/DailyPage'
-import { LiveStakePage } from './pages/LiveStakePage'
-import { BetfairPage } from './pages/BetfairPage'
 import { LoginPage } from './pages/LoginPage'
 import { LoadingSpinner } from './components/common/LoadingSpinner'
 
@@ -45,16 +39,10 @@ function ProtectedApp() {
     <Routes>
       <Route element={<PageShell />}>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/daily" element={<DailyPage />} />
-        <Route path="/racing" element={<HorseRacingPage />} />
         <Route path="/scanner" element={<ScannerPage />} />
-        <Route path="/overlays" element={<OverlaysPage />} />
         <Route path="/planner" element={<PlannerPage />} />
-        <Route path="/live-stake" element={<LiveStakePage />} />
-        <Route path="/betfair" element={<BetfairPage />} />
         <Route path="/results" element={<ResultsPage />} />
         <Route path="/bets" element={<BetsPage />} />
-        <Route path="/markets" element={<MarketsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>
