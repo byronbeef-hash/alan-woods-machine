@@ -220,7 +220,7 @@ function MirrorPanel({ bets, onClose }: { bets: Bet[]; onClose: () => void }) {
 
           <p className="mt-2 text-[10px] text-gray-600">
             Bets will be placed as BACK orders on Betfair Exchange at the current best available odds.
-            Your Betfair balance: $2,500 AUD.
+            Bets placed as BACK orders on Betfair Exchange at best available odds.
           </p>
         </>
       )}

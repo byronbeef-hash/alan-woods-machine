@@ -52,9 +52,10 @@ async function fetchTopOverlays(sportKey: string): Promise<TopOverlay[]> {
     const { data, error } = await supabase
       .from('racing_overlays')
       .select('*')
-      .eq('verdict', 'OVERLAY')
+      .in('verdict', ['OVERLAY', 'MARGINAL'])
+      .gt('we_net', 0.95)
       .order('we_net', { ascending: false })
-      .limit(8)
+      .limit(12)
     if (error) throw error
     return ((data || []) as Record<string, unknown>[]).map(r => ({
       id: r.id as number,
@@ -186,6 +187,31 @@ export function DashboardPage() {
 
       <KPICards bets={allBets} />
 
+      {/* System Status Bar */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold border ${
+              isDemo ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'
+            }`}>{isDemo ? 'DEMO' : 'LIVE'}</span>
+            <span className="text-xs text-gray-400">
+              {allBets.filter(b => b.result === 'WIN').length}W / {allBets.filter(b => b.result === 'LOSS').length}L
+            </span>
+            <span className="text-xs text-gray-500">|</span>
+            <span className="text-xs text-gray-400">
+              Total staked: <span className="font-mono text-white">${allBets.reduce((s, b) => s + (b.bet_size || 0), 0).toFixed(0)}</span>
+            </span>
+            <span className="text-xs text-gray-500">|</span>
+            <span className={`text-xs font-mono font-bold ${allBets.reduce((s, b) => s + (b.pnl || 0), 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              P&L: {allBets.reduce((s, b) => s + (b.pnl || 0), 0) >= 0 ? '+' : ''}${allBets.reduce((s, b) => s + (b.pnl || 0), 0).toFixed(2)}
+            </span>
+          </div>
+          <span className="text-[10px] text-gray-500">
+            {new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </span>
+        </div>
+      </div>
+
       {/* Live Betfair Bets */}
       {LIVE_BETS.length > 0 && (
         <div className="rounded-xl border-2 border-cyan-500/30 bg-gray-900 p-5">
@@ -281,15 +307,22 @@ export function DashboardPage() {
                 </p>
               </div>
             </div>
-            <span className="text-[10px] text-gray-500">Thu 19 Mar, 7:30 PM AEST — Hawks v Swans</span>
+            <span className="text-[10px] text-gray-500">
+              {LIVE_BETS.length > 0 && LIVE_BETS[0].race_time
+                ? formatTime(LIVE_BETS[0].race_time)
+                : new Date().toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </span>
           </div>
         </div>
       )}
 
       {/* Top Overlays */}
-      {overlays.length > 0 && (
         <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-          <h3 className="text-sm font-bold text-white mb-4">Top Overlays</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-white">Top Overlays</h3>
+            <span className="text-[10px] text-gray-500">{overlays.length} found</span>
+          </div>
+      {overlays.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-gray-300">
               <thead className="border-b border-gray-800 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
@@ -344,8 +377,13 @@ export function DashboardPage() {
               </tbody>
             </table>
           </div>
-        </div>
+      ) : (
+          <div className="text-center py-8 text-sm text-gray-500">
+            No overlays found. The scanner checks Betfair for pricing inefficiencies across all racing meetings.
+            Use the Planner or Daily page to trigger a scan.
+          </div>
       )}
+        </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <BankrollChart bets={allBets} />
