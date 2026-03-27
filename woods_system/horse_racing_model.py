@@ -144,17 +144,30 @@ class HorseRacingModel:
         adjustments = {}
         combined_factor = 1.0
 
-        # 1. FORM — strongest predictor
+        # 1. FORM — strongest predictor (35% of total model weight per Benter)
         form_str = meta.get('FORM', '') or ''
         form_score = self._score_form(form_str)
-        # Scale form score relative to average (0.5 = average form)
-        form_factor = 0.85 + (form_score * 0.30)  # Range: 0.85 to 1.15
+        # Scale form: 0.80 (terrible) to 1.25 (winning machine)
+        # Average form (0.4) maps to ~1.0 (neutral)
+        form_factor = 0.80 + (form_score * 0.45)  # Range: 0.80 to 1.25
         combined_factor *= form_factor
         adjustments['form'] = round(form_factor - 1, 3)
 
-        # 2. BARRIER DRAW
+        # 2. BARRIER DRAW — impact varies by race distance
         barrier = int(meta.get('STALL_DRAW', 5) or 5)
-        barrier_factor = BARRIER_FACTORS.get(barrier, 0.95)
+        barrier_factor = BARRIER_FACTORS.get(min(barrier, 20), 0.82)
+        # Reduce barrier impact for longer races (1600m+) where early position matters less
+        # and increase for sprints (< 1200m) where barrier is critical
+        race_name = meta.get('_race_name', '')
+        dist_match = __import__('re').search(r'(\d{3,4})m', race_name)
+        if dist_match:
+            dist = int(dist_match.group(1))
+            if dist >= 2000:
+                barrier_factor = 1.0 + (barrier_factor - 1.0) * 0.3  # 30% of normal impact
+            elif dist >= 1600:
+                barrier_factor = 1.0 + (barrier_factor - 1.0) * 0.5  # 50% of normal impact
+            elif dist <= 1100:
+                barrier_factor = 1.0 + (barrier_factor - 1.0) * 1.3  # 130% of normal impact for sprints
         combined_factor *= barrier_factor
         adjustments['barrier'] = round(barrier_factor - 1, 3)
 
@@ -276,37 +289,68 @@ class HorseRacingModel:
     def _score_form(self, form_str: str) -> float:
         """
         Score recent form from 0 (terrible) to 1 (perfect).
-        Uses weighted average of last 5 positions.
+        Uses weighted average of last 5 positions with non-linear scoring.
+
+        Key improvements over linear scoring:
+        - Winners (1) get exponential boost — a horse that wins is much better than 2nd
+        - Placings (2-3) are solid — significantly better than unplaced
+        - Unplaced (5-9) is penalised more harshly
+        - 0 (10th+) and x (fall) are severely penalised
+        - Consistency bonus: horses that always place get a boost
         """
         if not form_str:
-            return 0.5  # Unknown form = average
+            return 0.4  # Unknown form = below average (conservative)
 
         positions = []
         for ch in str(form_str):
-            if ch.isdigit():
+            if ch == '0':
+                positions.append(10)  # 10th or worse
+            elif ch.isdigit():
                 positions.append(int(ch))
             elif ch.lower() in ('x', 'f', 'd'):
-                positions.append(9)  # Fall/DNF = bad
+                positions.append(12)  # Fall/DNF = very bad
             # Skip other chars like spaces, dashes
 
         if not positions:
-            return 0.5
+            return 0.4
 
-        # Take last 5 (most recent first — form string reads left to right = oldest to newest)
-        recent = positions[-5:]  # Last 5 characters
-        recent.reverse()  # Now most recent first
+        # Take last 5 (most recent first)
+        recent = positions[-5:]
+        recent.reverse()  # Most recent first
 
-        # Weighted score: position 1 = score 1.0, position 2 = 0.8, etc.
+        # Non-linear position scoring (Benter-style)
+        POS_SCORES = {
+            1: 1.00,   # Win — full marks
+            2: 0.75,   # 2nd — strong
+            3: 0.60,   # 3rd — solid placing
+            4: 0.45,   # 4th — close
+            5: 0.30,   # 5th — fair
+            6: 0.20,   # 6th — mid-pack
+            7: 0.12,   # 7th — below average
+            8: 0.06,   # 8th — poor
+            9: 0.03,   # 9th — very poor
+        }
+
         total_weight = 0
         weighted_score = 0
         for i, pos in enumerate(recent):
             weight = FORM_WEIGHTS[i] if i < len(FORM_WEIGHTS) else 0.05
-            # Convert position to score: 1st = 1.0, 2nd = 0.8, 3rd = 0.65, etc.
-            pos_score = max(0, 1.0 - (pos - 1) * 0.15)
+            pos_score = POS_SCORES.get(pos, 0.01)  # 10+ or fall = 0.01
             weighted_score += pos_score * weight
             total_weight += weight
 
-        return weighted_score / total_weight if total_weight > 0 else 0.5
+        base_score = weighted_score / total_weight if total_weight > 0 else 0.4
+
+        # Consistency bonus: if all recent runs are placed (1-3), boost
+        placed_count = sum(1 for p in recent if p <= 3)
+        if len(recent) >= 3 and placed_count >= 3:
+            base_score = min(1.0, base_score * 1.08)  # 8% consistency bonus
+
+        # Recent winner bonus: last start win gets extra weight
+        if recent and recent[0] == 1:
+            base_score = min(1.0, base_score * 1.05)  # 5% last-start winner bonus
+
+        return base_score
 
     @staticmethod
     def _get_freshness_factor(days: int) -> float:
@@ -330,24 +374,32 @@ class HorseRacingModel:
     @staticmethod
     def _get_flb_factor(back_price: float) -> float:
         """
-        Favourite-longshot bias correction.
-        Research shows: short-priced horses are over-bet,
-        long-priced horses are under-bet in Australian racing.
+        Favourite-longshot bias correction for AUSTRALIAN racing.
+
+        AU Betfair research (Snowberg & Wolfers 2010, Benter 1994):
+        - Favourites ($1.50-$3) are UNDER-bet on exchanges — slight value
+        - Mid-range ($4-$8) are efficiently priced
+        - Longshots ($15+) are OVER-bet — punters overvalue big payoffs
+        - This is the OPPOSITE of US tote markets
+
+        Key: Betfair exchange markets have less FLB than tote, but it still exists.
         """
         if back_price < 2.0:
-            return 0.93  # Heavy favourite — market overestimates
+            return 1.03  # Short favs — slight underestimation on exchange
         elif back_price < 3.0:
-            return 0.96
+            return 1.02  # Favs — mild value
         elif back_price < 5.0:
-            return 0.98
+            return 1.01  # Short-mid — near efficient
         elif back_price < 8.0:
-            return 1.00  # Mid-range — fairly priced
+            return 1.00  # Mid-range — efficiently priced
         elif back_price < 15.0:
-            return 1.02  # Value range — slight underestimation
+            return 0.99  # Mid-longshot — slight overestimation
         elif back_price < 25.0:
-            return 1.03
+            return 0.97  # Longshot — punters over-bet these
+        elif back_price < 50.0:
+            return 0.95  # Big longshot — significant over-bet
         else:
-            return 1.04  # Longshots — small positive bias
+            return 0.92  # Extreme longshot — almost never value
 
     # ------------------------------------------------------------------
     # Race scanning
@@ -420,6 +472,9 @@ class HorseRacingModel:
                 runner_ff_stats = formfav_runners.get(clean_name)
                 if runner_ff_stats:
                     runner_gear = runner_ff_stats.get('gear_change')
+
+            # Inject race name into meta for distance-based adjustments
+            meta['_race_name'] = market_name
 
             # Run model
             model_result = self.calculate_model_probability(
