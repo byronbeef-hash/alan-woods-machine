@@ -502,15 +502,18 @@ class Database:
     # -------------------------------------------------------------------------
 
     def insert_racing_overlays(self, results: list[dict], scan_id: str) -> int:
-        """Write fresh racing overlay results. Clears ALL old data first — no stale data ever."""
+        """Write fresh racing overlay results. Only expires past races, preserves future ones."""
         if not self.enabled or not results:
             return 0
 
-        # Delete ALL existing rows — fresh scan replaces everything
+        # Only delete overlays for races that have ALREADY STARTED (expired)
+        # This preserves future race data so the dashboard always shows something
         try:
-            self.client.table("racing_overlays").delete().neq("id", 0).execute()
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc).isoformat()
+            self.client.table("racing_overlays").delete().lt("start_time", now).execute()
         except Exception as e:
-            print(f"  [Supabase] Warning: could not clear old racing overlays: {e}")
+            print(f"  [Supabase] Warning: could not expire old racing overlays: {e}")
 
         records = []
         for r in results:
@@ -560,12 +563,13 @@ class Database:
             return 0
 
     def expire_racing_overlays(self, max_age_hours: int = 2):
-        """Delete racing overlays older than max_age_hours to prevent stale data."""
+        """Delete racing overlays where the race has ALREADY STARTED (past start_time)."""
         if not self.enabled:
             return
         try:
-            cutoff = (datetime.now() - timedelta(hours=max_age_hours)).isoformat()
-            self.client.table("racing_overlays").delete().lt("created_at", cutoff).execute()
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc).isoformat()
+            self.client.table("racing_overlays").delete().lt("start_time", now).execute()
         except Exception as e:
             print(f"  [Supabase] Error expiring racing overlays: {e}")
 

@@ -123,11 +123,25 @@ class RacingScraper:
             hum_vals = [v for v in humidity[window] if v is not None]
             wind_vals = [v for v in wind[window] if v is not None]
 
+            # Guard against None values in API response
+            def safe_avg(vals):
+                clean = [v for v in vals if v is not None]
+                return sum(clean) / len(clean) if clean else None
+
+            def safe_sum(vals):
+                clean = [v for v in vals if v is not None]
+                return sum(clean) if clean else None
+
+            rain_total = safe_sum(rain_vals)
+            temp_avg = safe_avg(temp_vals)
+            hum_avg = safe_avg(hum_vals)
+            wind_avg = safe_avg(wind_vals)
+
             result = {
-                'rain_mm': round(sum(rain_vals), 1) if rain_vals else 0,
-                'temperature': round(sum(temp_vals) / len(temp_vals), 1) if temp_vals else 20,
-                'humidity': round(sum(hum_vals) / len(hum_vals), 0) if hum_vals else 50,
-                'wind_speed': round(sum(wind_vals) / len(wind_vals), 1) if wind_vals else 0,
+                'rain_mm': round(rain_total, 1) if rain_total is not None else 0,
+                'temperature': round(temp_avg, 1) if temp_avg is not None else 20,
+                'humidity': round(hum_avg, 0) if hum_avg is not None else 50,
+                'wind_speed': round(wind_avg, 1) if wind_avg is not None else 0,
                 'source': 'open-meteo-bom',
             }
             self._cache[cache_key] = result
